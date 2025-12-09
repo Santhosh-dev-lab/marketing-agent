@@ -1,12 +1,14 @@
 "use client";
 
-import { BookOpen, Sparkles, Zap, Shield, Code, ArrowRight, Menu, X } from "lucide-react";
+import { BookOpen, Sparkles, Zap, Shield, Code, ArrowRight, Menu, X, ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 
 export default function DocumentationPage() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const router = useRouter();
 
     const scrollToSection = (id: string) => {
         const element = document.getElementById(id);
@@ -30,13 +32,22 @@ export default function DocumentationPage() {
             {/* Header */}
             <header className="px-6 h-16 flex items-center justify-between border-b border-zinc-200 dark:border-white/10 sticky top-0 bg-white/80 dark:bg-black/80 backdrop-blur-md z-50">
                 <div className="max-w-7xl w-full mx-auto flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-md text-white">
-                            <BookOpen className="w-4 h-4" />
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={() => router.back()}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-white/5 transition-all text-sm font-medium"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Back
+                        </button>
+                        <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-md text-white">
+                                <BookOpen className="w-4 h-4" />
+                            </div>
+                            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-400 dark:to-pink-600 hidden sm:block">
+                                Documentation
+                            </span>
                         </div>
-                        <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600 dark:from-purple-400 dark:to-pink-600 hidden sm:block">
-                            Documentation
-                        </span>
                     </div>
 
                     <div className="flex items-center gap-4">

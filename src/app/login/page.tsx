@@ -26,11 +26,12 @@ export default function LoginPage() {
 
         try {
             if (isSignUp) {
+                const origin = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : '';
                 const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
-                        emailRedirectTo: `${getURL()}auth/callback?next=/verified`,
+                        emailRedirectTo: `${origin}/auth/callback?next=/verified`,
                     },
                 });
                 if (error) throw error;

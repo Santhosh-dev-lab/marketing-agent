@@ -61,6 +61,13 @@ create table posts (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Indexes for performance (FKs are not indexed by default)
+create index idx_brands_user_id on brands(user_id);
+create index idx_assets_brand_id on assets(brand_id);
+create index idx_campaigns_brand_id on campaigns(brand_id);
+create index idx_posts_campaign_id on posts(campaign_id);
+
+
 -- Secure the tables with RLS
 alter table profiles enable row level security;
 alter table brands enable row level security;

@@ -39,11 +39,17 @@ export async function middleware(request: NextRequest) {
         if (!user) {
             return NextResponse.redirect(new URL('/login', request.url))
         }
+        if (!user.email_confirmed_at) {
+            return NextResponse.redirect(new URL('/login?error=Please%20verify%20your%20email%20first', request.url))
+        }
     }
 
     // Redirect to homepage if logged in and trying to access login
     if (request.nextUrl.pathname === '/login') {
         if (user) {
+            // Optional: Block access to homepage if unverified?
+            // User requested "without confirming ... user should not be given access".
+            // Assuming this means access to the *app* (dashboard). Homepage usually remains public.
             return NextResponse.redirect(new URL('/', request.url))
         }
     }

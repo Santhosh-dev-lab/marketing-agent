@@ -11,16 +11,28 @@ export async function GET(request: Request) {
 
     if (code) {
         const supabase = await createClient()
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
 
-        if (error) {
-            console.error("[Auth Callback] Exchange Error:", error)
-            return NextResponse.redirect(`${origin}/login?error=auth_code_error`)
+        // PKCE Flow: Exchange code for session
+        // Note: This often fails on cross-device (mobile) because the 'code_verifier' cookie is missing.
+        // However, the link click itself verified the email at Supabase level.
+        try {
+            const { error } = await supabase.auth.exchangeCodeForSession(code)
+            if (error) throw error
+            console.log("[Auth Callback] Exchange success. Session created.");
+        } catch (error: any) {
+            const isPkceError = error?.code === 'validation_failed' || error?.name === 'AuthApiError';
+            if (isPkceError) {
+                console.warn("[Auth Callback] PKCE verification failed (likely cross-device). Email is verified, but auto-login skipped.");
+                // We perform a "soft" redirect to login with verified param as a fallback
+                // But typically we still want to show the /verified page first
+            } else {
+                console.error("[Auth Callback] Exchange Error:", error)
+                return NextResponse.redirect(`${origin}/login?error=auth_code_error`)
+            }
         }
-
-        console.log("[Auth Callback] Exchange success. Session created.");
     } else {
-        console.warn("[Auth Callback] No code found in URL.");
+        // This log is noisy for double-clicks or pre-fetches
+        console.log("[Auth Callback] No auth code found in URL (possibly handled or direct access).");
     }
 
     // Force redirect to the verified page

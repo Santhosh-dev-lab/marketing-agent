@@ -2,9 +2,9 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Loader2, ArrowRight, Mail, Lock, CheckCircle2 } from "lucide-react";
+import { Loader2, ArrowRight, Mail, Lock, CheckCircle2, RefreshCw } from "lucide-react";
 import { getURL } from "@/lib/utils";
 
 export default function LoginPage() {
@@ -24,7 +24,7 @@ export default function LoginPage() {
 
         try {
             if (isSignUp) {
-                const { error } = await supabase.auth.signUp({
+                const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
@@ -33,6 +33,20 @@ export default function LoginPage() {
                 });
                 if (error) throw error;
                 setError("Check your email for the confirmation link.");
+
+                // If we have a session (unverified), we can poll for verification status
+                if (data.session) {
+                    const interval = setInterval(async () => {
+                        // Force refresh session to get latest claims
+                        const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+                        if (session?.user?.email_confirmed_at) {
+                            clearInterval(interval);
+                            router.push("/");
+                            router.refresh();
+                        }
+                    }, 3000);
+                }
+
             } else {
                 const { error } = await supabase.auth.signInWithPassword({
                     email,
@@ -48,6 +62,19 @@ export default function LoginPage() {
             setIsLoading(false);
         }
     };
+
+    // Auto-refresh for Verified Users
+    useEffect(() => {
+        const checkUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user?.email_confirmed_at) {
+                router.push("/");
+                router.refresh();
+            }
+        };
+        // Check once on mount
+        checkUser();
+    }, [router, supabase]);
 
     return (
         <div className="min-h-screen flex bg-white dark:bg-[#030303] text-zinc-900 dark:text-white selection:bg-purple-500/30 font-sans transition-colors duration-300">
@@ -110,13 +137,27 @@ export default function LoginPage() {
                             <motion.div
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
-                                className={`text-sm px-4 py-3 rounded-lg flex items-start gap-2 ${error.includes("Check your email")
+                                className={`text-sm px-4 py-3 rounded-lg flex flex-col gap-2 ${error.includes("Check your email")
                                     ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
                                     : "bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/20"
                                     }`}
                             >
-                                {error.includes("Check") && <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-                                {error}
+                                <div className="flex items-start gap-2">
+                                    {error.includes("Check") && <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+                                    <span>{error}</span>
+                                </div>
+                                {error.includes("Check") && (
+                                    <div className="pl-6 text-xs text-emerald-600/80 dark:text-emerald-400/80">
+                                        <p className="mb-2">Once verified on mobile, this page should update automatically.</p>
+                                        <button
+                                            type="button"
+                                            onClick={() => window.location.reload()}
+                                            className="underline font-semibold hover:text-emerald-500"
+                                        >
+                                            Not redirecting? Click here to refresh.
+                                        </button>
+                                    </div>
+                                )}
                             </motion.div>
                         )}
 

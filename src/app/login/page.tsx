@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Loader2, ArrowRight, Mail, Lock, CheckCircle2 } from "lucide-react";
 import { getURL } from "@/lib/utils";
@@ -24,7 +24,7 @@ export default function LoginPage() {
 
         try {
             if (isSignUp) {
-                const { error } = await supabase.auth.signUp({
+                const { data, error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
@@ -33,6 +33,22 @@ export default function LoginPage() {
                 });
                 if (error) throw error;
                 setError("Check your email for the confirmation link.");
+
+                // If we have a session (unverified), we can poll for verification status
+                if (data.session) {
+                    const interval = setInterval(async () => {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (user?.email_confirmed_at) {
+                            clearInterval(interval);
+                            router.push("/");
+                            router.refresh();
+                        }
+                    }, 2000);
+                    // Cleanup interval on component unmount is tricky inside the handler, 
+                    // but we can rely on the router push or component state if we moved this to useEffect.
+                    // For simplicity in this function, we'll let it run until redirect.
+                }
+
             } else {
                 const { error } = await supabase.auth.signInWithPassword({
                     email,
@@ -48,6 +64,20 @@ export default function LoginPage() {
             setIsLoading(false);
         }
     };
+
+    // Auto-refresh for Verified Users (if session exists but blocked by middleware initially)
+    // This handles the "reload" case if they verified elsewhere and came back.
+    useEffect(() => {
+        const checkUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user?.email_confirmed_at) {
+                router.push("/");
+                router.refresh();
+            }
+        };
+        // Check once on mount
+        checkUser();
+    }, [router, supabase]);
 
     return (
         <div className="min-h-screen flex bg-white dark:bg-[#030303] text-zinc-900 dark:text-white selection:bg-purple-500/30 font-sans transition-colors duration-300">

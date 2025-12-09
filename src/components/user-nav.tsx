@@ -102,8 +102,8 @@ export function UserNav({ user }: UserNavProps) {
                             <MenuButton icon={UserIcon} label="Profile" />
                             <MenuButton icon={Bell} label="Notifications" />
                             <MenuButton icon={Settings} label="Settings" />
-                            <MenuButton icon={BookOpen} label="Documentation" />
-                            <MenuButton icon={HelpCircle} label="Help Center" />
+                            <MenuButton icon={BookOpen} label="Documentation" href="/documentation" />
+                            <MenuButton icon={HelpCircle} label="Help Center" href="/help-center" />
                         </div>
 
                         {/* Plan Upgrade */}
@@ -136,7 +136,18 @@ export function UserNav({ user }: UserNavProps) {
     );
 }
 
-function MenuButton({ icon: Icon, label }: { icon: any, label: string }) {
+import Link from "next/link";
+
+function MenuButton({ icon: Icon, label, href }: { icon: any, label: string, href?: string }) {
+    if (href) {
+        return (
+            <Link href={href} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-zinc-600 dark:text-neutral-300 hover:bg-zinc-100 dark:hover:bg-neutral-800 hover:text-zinc-900 dark:hover:text-white rounded-lg transition-colors text-left group">
+                <Icon className="w-4 h-4 text-zinc-400 dark:text-neutral-500 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />
+                {label}
+            </Link>
+        )
+    }
+
     return (
         <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-zinc-600 dark:text-neutral-300 hover:bg-zinc-100 dark:hover:bg-neutral-800 hover:text-zinc-900 dark:hover:text-white rounded-lg transition-colors text-left group">
             <Icon className="w-4 h-4 text-zinc-400 dark:text-neutral-500 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors" />

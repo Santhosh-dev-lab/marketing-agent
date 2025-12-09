@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Loader2, ArrowRight, Mail, Lock, CheckCircle2 } from "lucide-react";
+import { getURL } from "@/lib/utils";
 
 export default function LoginPage() {
     const [email, setEmail] = useState("");
@@ -27,7 +28,7 @@ export default function LoginPage() {
                     email,
                     password,
                     options: {
-                        emailRedirectTo: `${location.origin}/auth/callback`,
+                        emailRedirectTo: `${getURL()}auth/callback`,
                     },
                 });
                 if (error) throw error;
@@ -110,8 +111,8 @@ export default function LoginPage() {
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 className={`text-sm px-4 py-3 rounded-lg flex items-start gap-2 ${error.includes("Check your email")
-                                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
-                                        : "bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/20"
+                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                    : "bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/20"
                                     }`}
                             >
                                 {error.includes("Check") && <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />}

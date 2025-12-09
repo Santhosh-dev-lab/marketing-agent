@@ -39,14 +39,23 @@ export default function LoginPage() {
                 // Polling for verification
                 if (data.session) {
                     const interval = setInterval(async () => {
-                        const { data: { session } } = await supabase.auth.refreshSession();
-                        if (session?.user?.email_confirmed_at) {
-                            clearInterval(interval);
-                            setIsGlobalLoading(true); // Show overlay before redirect
-                            router.push("/");
-                            router.refresh();
+                        try {
+                            const { data: { session }, error } = await supabase.auth.refreshSession();
+                            if (error) {
+                                console.log("Refresh error, ignoring:", error.message);
+                                return;
+                            }
+                            // If we have a verified email, redirect
+                            if (session?.user?.email_confirmed_at) {
+                                clearInterval(interval);
+                                setIsGlobalLoading(true);
+                                router.push("/");
+                                router.refresh();
+                            }
+                        } catch (e) {
+                            console.error("Polling error:", e);
                         }
-                    }, 3000);
+                    }, 2000);
                 }
 
             } else {

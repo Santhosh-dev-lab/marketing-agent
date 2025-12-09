@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Marketing Agent Web App (Phase 0)
+
+This is a Next.js (App Router) project set up as the foundation for the Marketing Agent.
+
+## Tech Stack
+- **Frontend**: Next.js 14+, Tailwind CSS, Shadcn/UI (planned).
+- **Backend Service**: Supabase (Postgres, Auth, Edge Functions).
+- **AI/ML**: Hugging Face Inference, Replicate, Qdrant (Vector DB).
+- **Deployment**: Vercel.
 
 ## Getting Started
 
-First, run the development server:
+### 1. Prerequisites
+- Node.js 18+
+- Supabase CLI (optional, for local functions dev)
+
+### 2. Environment Variables
+Copy `.env.example` to `.env.local` and fill in your keys:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Installation
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Running Locally
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 5. Running Tests
+```bash
+npm run test
+```
 
-## Learn More
+## Backend Setup (Supabase)
 
-To learn more about Next.js, take a look at the following resources:
+### Schema
+The database schema is located in `supabase/schema.sql`. Run this in your Supabase SQL Editor to create the necessary tables (`profiles`, `brands`, `assets`, `campaigns`, `posts`, `llm_cache`).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Edge Functions
+The functions are in `supabase/functions`.
+To deploy (requires Supabase CLI):
+```bash
+supabase functions deploy test-endpoint
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Project Structure
+- `src/app`: Next.js pages and layouts.
+- `src/components`: React components.
+- `src/lib`: Utilities (Sentry, etc.).
+- `supabase`: Database schema and Edge Functions.
+- `.github`: CI/CD workflows.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## CI/CD
+GitHub Actions are configured in `.github/workflows/ci.yml` to lint, build, and test on push to `main`.

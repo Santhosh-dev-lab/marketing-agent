@@ -40,7 +40,7 @@ export default function LoginPage() {
                     email,
                     password,
                     options: {
-                        emailRedirectTo: `${origin}/auth/callback?next=/verified`,
+                        emailRedirectTo: `${origin}/auth/callback?next=/verified&email=${encodeURIComponent(email)}`,
                     },
                 });
                 if (error) throw error;

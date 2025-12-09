@@ -22,9 +22,26 @@ export async function GET(request: Request) {
         } catch (error: any) {
             const isPkceError = error?.code === 'validation_failed' || error?.name === 'AuthApiError';
             if (isPkceError) {
-                console.warn("[Auth Callback] PKCE verification failed (likely cross-device). Email is verified, but auto-login skipped.");
-                // We perform a "soft" redirect to login with verified param as a fallback
-                // But typically we still want to show the /verified page first
+                console.warn("[Auth Callback] PKCE verification failed. Attempting rescue via verifyOtp...");
+
+                // Rescue: Try to verify using the token and email explicitly
+                const email = searchParams.get('email');
+                if (email) {
+                    const { data, error: verifyError } = await supabase.auth.verifyOtp({
+                        token: code,
+                        type: 'signup',
+                        email,
+                    });
+
+                    if (verifyError) {
+                        console.error("[Auth Callback] Rescue failed:", verifyError);
+                    } else {
+                        console.log("[Auth Callback] Rescue success! Email verified via OTP.");
+                        // We might even have a session now from verifyOtp?
+                    }
+                } else {
+                    console.warn("[Auth Callback] No email found for rescue.");
+                }
             } else {
                 console.error("[Auth Callback] Exchange Error:", error)
                 return NextResponse.redirect(`${origin}/login?error=auth_code_error`)

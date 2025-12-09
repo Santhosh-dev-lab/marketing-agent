@@ -30,7 +30,7 @@ export default function LoginPage() {
                     email,
                     password,
                     options: {
-                        emailRedirectTo: `${getURL()}auth/callback`,
+                        emailRedirectTo: `${getURL()}auth/callback?next=/verified`,
                     },
                 });
                 if (error) throw error;

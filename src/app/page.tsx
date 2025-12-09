@@ -4,7 +4,15 @@ import { UserNav } from "@/components/user-nav";
 
 export default async function Home() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  let user = null;
+
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch (error) {
+    // Suppress "Invalid Refresh Token" error
+    console.error("Home Page Auth Check Error:", error);
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-black text-zinc-900 dark:text-white selection:bg-purple-500 selection:text-white font-sans transition-colors duration-300">

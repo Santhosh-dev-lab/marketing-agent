@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
     let response = NextResponse.next({
         request: {
             headers: request.headers,
@@ -32,7 +32,14 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    const { data: { user } } = await supabase.auth.getUser()
+    let user = null
+    try {
+        const { data } = await supabase.auth.getUser()
+        user = data.user
+    } catch (e) {
+        // Suppress "Invalid Refresh Token" error mostly seen in dev
+        console.error("Auth Middleware Error:", e)
+    }
 
     // Protect dashboard routes
     if (request.nextUrl.pathname.startsWith('/dashboard')) {
@@ -47,9 +54,6 @@ export async function middleware(request: NextRequest) {
     // Redirect to homepage if logged in and trying to access login
     if (request.nextUrl.pathname === '/login') {
         if (user) {
-            // Optional: Block access to homepage if unverified?
-            // User requested "without confirming ... user should not be given access".
-            // Assuming this means access to the *app* (dashboard). Homepage usually remains public.
             return NextResponse.redirect(new URL('/', request.url))
         }
     }

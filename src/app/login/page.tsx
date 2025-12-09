@@ -226,9 +226,20 @@ export default function LoginPage() {
                                 <Loader2 className="w-3 h-3 animate-spin" />
                                 <span>Waiting for verification...</span>
                             </div>
-                            <div className="text-xs text-zinc-400">
-                                <button onClick={() => window.location.reload()} className="underline hover:text-zinc-900 dark:hover:text-white mb-2 block w-full">I've verified, refresh page</button>
-                                <button onClick={() => setEmailSentState(false)} className="hover:text-zinc-900 dark:hover:text-white">Use a different email</button>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => {
+                                        setIsSignUp(false);
+                                        setEmailSentState(false);
+                                        setError(null);
+                                    }}
+                                    className="w-full bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-neutral-200 font-bold rounded-xl py-3 transition-all duration-200 text-sm shadow-sm"
+                                >
+                                    I've Verified, Sign In Now
+                                </button>
+                                <button onClick={() => setEmailSentState(false)} className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+                                    Use a different email
+                                </button>
                             </div>
                         </motion.div>
                     )}

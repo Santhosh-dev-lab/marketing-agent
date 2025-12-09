@@ -18,6 +18,15 @@ export default function LoginPage() {
 
     const router = useRouter();
     const supabase = createClient();
+    // Move access to searchParams inside useEffect or useSearchParams hook to be safe, but for now accessing via window in useEffect is safer for hydration
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('verified') === 'true') {
+            setError("Email successfully verified! Please log in.");
+            // Optional: change style of error to success
+        }
+    }, []);
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -171,8 +180,9 @@ export default function LoginPage() {
                                     <motion.div
                                         initial={{ opacity: 0, scale: 0.95 }}
                                         animate={{ opacity: 1, scale: 1 }}
-                                        className="text-sm px-4 py-3 rounded-lg bg-red-500/10 text-red-600 dark:text-red-300 border border-red-500/20"
+                                        className={`text-sm px-4 py-3 rounded-lg border ${error.includes('verified') ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-300 border-red-500/20'}`}
                                     >
+                                        {error.includes('verified') && <CheckCircle2 className="w-4 h-4 inline mr-2 -mt-0.5" />}
                                         {error}
                                     </motion.div>
                                 )}

@@ -8,39 +8,6 @@ create table profiles (
   full_name text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
-
--- Brands: Settings & Voice
-create table brands (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references profiles(id) on delete cascade not null,
-  name text not null,
-  voice_settings jsonb default '{}'::jsonb, -- Store "witty", "formal" etc.
-  social_connections jsonb default '{}'::jsonb, -- Store connected account metadata
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- Assets: Uploaded files
-create table assets (
-  id uuid default uuid_generate_v4() primary key,
-  brand_id uuid references brands(id) on delete cascade not null,
-  file_path text not null, -- Supabase Storage path
-  file_type text, -- 'image', 'pdf', etc.
-  metadata jsonb default '{}'::jsonb,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- LLM Cache: Cost optimization
-create table llm_cache (
-  id uuid default uuid_generate_v4() primary key,
-  prompt_hash text not null,
-  model text not null,
-  response text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-create index idx_llm_cache_hash on llm_cache(prompt_hash);
-
--- Campaigns: Groups of posts
-create table campaigns (
   id uuid default uuid_generate_v4() primary key,
   brand_id uuid references brands(id) on delete cascade not null,
   name text not null,

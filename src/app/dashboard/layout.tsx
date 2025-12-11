@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, Box, LayoutDashboard, Settings } from "lucide-react";
+import { BarChart3, Box, LayoutDashboard, Settings, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -20,8 +20,9 @@ export default function DashboardLayout({
 
             <div className="relative z-10 flex min-h-screen">
                 {/* Sidebar */}
-                <aside className="w-64 border-r border-zinc-200 dark:border-white/10 p-6 flex flex-col gap-8 bg-white/50 dark:bg-black/50 backdrop-blur-xl sticky top-0 h-screen">
-                    <div className="flex items-center gap-2 px-2">
+                <aside className="w-64 border-r border-zinc-200 dark:border-white/10 p-6 flex flex-col gap-6 bg-white/50 dark:bg-black/50 backdrop-blur-xl sticky top-0 h-screen">
+
+                    <div className="flex items-center gap-2 px-2 pb-2">
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-md text-white font-bold">
                             M
                         </div>
@@ -69,7 +70,7 @@ export default function DashboardLayout({
                         </Link>
                     </nav>
 
-                    <div className="mt-auto">
+                    <div className="mt-auto flex flex-col gap-4">
                         <div className="p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-200 dark:border-purple-500/20">
                             <h4 className="text-sm font-bold text-purple-900 dark:text-purple-100 mb-1">Pro Plan</h4>
                             <p className="text-xs text-purple-700 dark:text-purple-300 mb-3">You have 2 credits remaining.</p>
@@ -77,6 +78,13 @@ export default function DashboardLayout({
                                 Upgrade Now
                             </button>
                         </div>
+                        <Link
+                            href="/"
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-white/5 transition-all text-sm font-medium w-full justify-center"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Back
+                        </Link>
                     </div>
                 </aside>
 

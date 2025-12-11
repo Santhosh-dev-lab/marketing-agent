@@ -1,5 +1,6 @@
 -- Enable UUID extension
 create extension if not exists "uuid-ossp";
+create extension if not exists "vector";
 
 -- Profiles: Users (Safe Creation)
 create table if not exists public.profiles (
@@ -16,6 +17,22 @@ create table if not exists public.brands (
   name text not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- CLEANUP & CONSTRAINT: Ensure one brand per user
+-- 1. Delete duplicates (keep oldest)
+delete from public.brands
+where id not in (
+  select id from (
+    select distinct on (user_id) id
+    from public.brands
+    order by user_id, created_at asc
+  ) as subquery
+);
+
+-- 2. Add Unique Constraint
+alter table public.brands drop constraint if exists brands_user_id_key;
+alter table public.brands add constraint brands_user_id_key unique (user_id);
+
 
 -- Add columns to Brands safely (if they don't exist)
 alter table public.brands add column if not exists website text;
@@ -55,6 +72,52 @@ create table if not exists public.generation_logs (
   error_message text,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- Agent Configs (Secure API Keys)
+create table if not exists public.agent_configs (
+  id uuid default gen_random_uuid() primary key,
+  brand_id uuid references public.brands(id) on delete cascade not null,
+  agent_type text not null, -- 'strategy', 'content', 'visual', 'brand_twin'
+  model_provider text default 'huggingface', -- 'openai', 'anthropic', 'huggingface'
+  api_key_encrypted text, -- We will store this encrypted (or effectively handled by RLS/Edge)
+  is_active boolean default true,
+  settings jsonb default '{}'::jsonb, -- custom prompts, etc.
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(brand_id, agent_type)
+);
+
+-- Agent Jobs (Orchestration)
+create table if not exists public.agent_jobs (
+  id uuid default gen_random_uuid() primary key,
+  brand_id uuid references public.brands(id) on delete cascade not null,
+  job_type text not null, -- 'generate_campaign', 'repurpose_content'
+  status text default 'pending', -- 'pending', 'processing', 'completed', 'failed'
+  input_data jsonb,
+  output_data jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- User Credits: 3 credits per agent per brand
+create table if not exists public.user_credits (
+  id uuid default gen_random_uuid() primary key,
+  brand_id uuid references public.brands(id) on delete cascade not null,
+  agent_type text not null, -- 'strategy', 'content', 'visual', 'brand_twin'
+  credits_remaining int default 3,
+  last_refill timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(brand_id, agent_type)
+);
+
+-- Memories (Vector Store for Brand Twin)
+create table if not exists public.memories (
+  id uuid default gen_random_uuid() primary key,
+  brand_id uuid references public.brands(id) on delete cascade not null,
+  content text not null,
+  embedding vector(768), -- Dimension for Gemini text-embedding-004
+  source_type text, -- 'website', 'file', 'manual'
+  metadata jsonb default '{}'::jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+create index if not exists idx_memories_brand_id on public.memories(brand_id);
 
 -- Campaigns: Groups of posts
 create table if not exists public.campaigns (
@@ -96,6 +159,10 @@ alter table public.campaigns enable row level security;
 alter table public.posts enable row level security;
 alter table public.generation_logs enable row level security;
 alter table public.llm_cache enable row level security;
+alter table public.agent_configs enable row level security;
+alter table public.agent_jobs enable row level security;
+alter table public.memories enable row level security;
+alter table public.user_credits enable row level security;
 
 -- Policies (Drop first to avoid conflicts)
 drop policy if exists "Users can see their own profile" on public.profiles;
@@ -143,16 +210,63 @@ drop policy if exists "Users can see posts of their campaigns" on public.posts;
 drop policy if exists "Users can insert posts to their campaigns" on public.posts;
 
 create policy "Users can see posts of their campaigns" on public.posts for select using (
-  exists (
-    select 1 from public.campaigns 
-    join public.brands on brands.id = campaigns.brand_id 
-    where campaigns.id = posts.campaign_id and brands.user_id = auth.uid()
-  )
+  exists (select 1 from public.campaigns join public.brands on campaigns.brand_id = brands.id where campaigns.id = posts.campaign_id and brands.user_id = auth.uid())
 );
 create policy "Users can insert posts to their campaigns" on public.posts for insert with check (
-  exists (
-    select 1 from public.campaigns 
-    join public.brands on brands.id = campaigns.brand_id 
-    where campaigns.id = campaign_id and brands.user_id = auth.uid()
-  )
+  exists (select 1 from public.campaigns join public.brands on campaigns.brand_id = brands.id where campaigns.id = campaign_id and brands.user_id = auth.uid())
 );
+
+-- Agent Configs policies
+drop policy if exists "Users can manage their agent configs" on public.agent_configs;
+create policy "Users can manage their agent configs" on public.agent_configs using (
+  exists (select 1 from public.brands where brands.id = agent_configs.brand_id and brands.user_id = auth.uid())
+);
+
+-- Agent Jobs policies
+drop policy if exists "Users can manage their agent jobs" on public.agent_jobs;
+create policy "Users can manage their agent jobs" on public.agent_jobs using (
+  exists (select 1 from public.brands where brands.id = agent_jobs.brand_id and brands.user_id = auth.uid())
+);
+
+-- Memories policies
+drop policy if exists "Users can manage their memories" on public.memories;
+create policy "Users can manage their memories" on public.memories using (
+  exists (select 1 from public.brands where brands.id = memories.brand_id and brands.user_id = auth.uid())
+);
+
+-- User Credits policies
+drop policy if exists "Users can view their own credits" on public.user_credits;
+create policy "Users can view their own credits" on public.user_credits for select using (
+  exists (select 1 from public.brands where brands.id = user_credits.brand_id and brands.user_id = auth.uid())
+);
+create policy "Users can update their own credits" on public.user_credits for update using (
+    exists (select 1 from public.brands where brands.id = user_credits.brand_id and brands.user_id = auth.uid())
+);
+
+-- RPC for RAG (Similarity Search)
+create or replace function match_memories (
+  query_embedding vector(768),
+  match_threshold float,
+  match_count int,
+  p_brand_id uuid
+)
+returns table (
+  id uuid,
+  content text,
+  similarity float
+)
+language plpgsql
+as $$
+begin
+  return query
+  select
+    memories.id,
+    memories.content,
+    1 - (memories.embedding <=> query_embedding) as similarity
+  from memories
+  where 1 - (memories.embedding <=> query_embedding) > match_threshold
+  and memories.brand_id = p_brand_id
+  order by memories.embedding <=> query_embedding
+  limit match_count;
+end;
+$$;

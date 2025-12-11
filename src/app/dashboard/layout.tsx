@@ -3,6 +3,8 @@
 import { BarChart3, Box, LayoutDashboard, Settings, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function DashboardLayout({
     children,
@@ -10,8 +12,41 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
+    const [credits, setCredits] = useState({ used: 0, left: 12 });
+    const supabase = createClient();
 
     const isActive = (path: string) => pathname === path;
+
+    useEffect(() => {
+        async function fetchCredits() {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+
+                const { data: brand } = await supabase.from('brands').select('id').eq('user_id', user.id).single();
+                if (!brand) return;
+
+                const { data: creditRows } = await supabase.from('user_credits').select('credits_remaining').eq('brand_id', brand.id);
+
+                const initiatedAgentsCount = creditRows?.length || 0;
+                // Assuming 4 agent types: strategy, content, visual, brand_twin
+                const totalAgents = 4;
+                const defaultCredits = 3;
+                const totalPossible = totalAgents * defaultCredits; // 12
+
+                const sumRemaining = creditRows?.reduce((a, b) => a + b.credits_remaining, 0) || 0;
+                const uninitiatedCredits = (totalAgents - initiatedAgentsCount) * defaultCredits;
+
+                const totalLeft = sumRemaining + uninitiatedCredits;
+                const totalUsed = totalPossible - totalLeft;
+
+                setCredits({ used: totalUsed, left: totalLeft });
+            } catch (e) {
+                console.error("Error fetching credits:", e);
+            }
+        }
+        fetchCredits();
+    }, []);
 
     return (
         <div className="min-h-screen bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans selection:bg-purple-500 selection:text-white">
@@ -60,6 +95,15 @@ export default function DashboardLayout({
                             Analytics
                         </Link>
                         <Link
+                            href="/dashboard/brand"
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${isActive('/dashboard/brand')
+                                ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-white/10'}`}
+                        >
+                            <span className="w-5 h-5 flex items-center justify-center font-bold text-xs border border-current rounded">B</span>
+                            Brand Twin
+                        </Link>
+                        <Link
                             href="/dashboard/settings"
                             className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${isActive('/dashboard/settings')
                                 ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400'
@@ -72,8 +116,17 @@ export default function DashboardLayout({
 
                     <div className="mt-auto flex flex-col gap-4">
                         <div className="p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-200 dark:border-purple-500/20">
-                            <h4 className="text-sm font-bold text-purple-900 dark:text-purple-100 mb-1">Pro Plan</h4>
-                            <p className="text-xs text-purple-700 dark:text-purple-300 mb-3">You have 2 credits remaining.</p>
+                            <h4 className="text-sm font-bold text-purple-900 dark:text-purple-100 mb-2">Pro Plan</h4>
+                            <div className="flex justify-between items-center text-xs mb-3">
+                                <span className="text-purple-600 dark:text-purple-400">Used: <span className="font-semibold">{credits.used}</span></span>
+                                <span className="text-purple-800 dark:text-purple-200">Left: <span className="font-semibold">{credits.left}</span></span>
+                            </div>
+                            <div className="w-full h-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-full mb-3 overflow-hidden">
+                                <div
+                                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
+                                    style={{ width: `${(credits.used / 12) * 100}%` }}
+                                />
+                            </div>
                             <button className="w-full py-1.5 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:opacity-90 transition-opacity">
                                 Upgrade Now
                             </button>

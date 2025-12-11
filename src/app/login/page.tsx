@@ -49,6 +49,14 @@ export default function LoginPage() {
 
         try {
             if (isSignUp) {
+                // Client-side password validation
+                const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+                if (!strongPasswordRegex.test(password)) {
+                    setError("Password is too weak. Please use at least 8 characters, including uppercase, lowercase, numbers, and symbols.");
+                    setIsLoading(false);
+                    return;
+                }
+
                 const origin = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : '';
                 const { data, error } = await supabase.auth.signUp({
                     email,
@@ -265,6 +273,33 @@ export default function LoginPage() {
                                             />
                                         </div>
                                     </div>
+                                    {isSignUp && password && (
+                                        <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: "auto" }}
+                                            className="space-y-2 pt-2"
+                                        >
+                                            <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Password strength:</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {[
+                                                    { label: "8+ chars", valid: password.length >= 8 },
+                                                    { label: "Lowercase", valid: /[a-z]/.test(password) },
+                                                    { label: "Uppercase", valid: /[A-Z]/.test(password) },
+                                                    { label: "Number", valid: /\d/.test(password) },
+                                                    { label: "Symbol", valid: /[\W_]/.test(password) },
+                                                ].map((req, i) => (
+                                                    <div key={i} className="flex items-center gap-2 text-xs">
+                                                        <div className={`w-4 h-4 rounded-full flex items-center justify-center transition-colors ${req.valid ? 'bg-green-500 text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400'}`}>
+                                                            {req.valid && <CheckCircle2 className="w-3 h-3" />}
+                                                        </div>
+                                                        <span className={req.valid ? 'text-zinc-700 dark:text-zinc-300' : 'text-zinc-400 dark:text-zinc-600'}>
+                                                            {req.label}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </motion.div>
+                                    )}
                                 </div>
 
                                 {error && (

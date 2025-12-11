@@ -12,7 +12,9 @@ import {
     BookOpen,
     HelpCircle,
     CreditCard,
-    ChevronUp
+    ChevronUp,
+    Mail,
+    Newspaper
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
@@ -102,6 +104,8 @@ export function UserNav({ user }: UserNavProps) {
                             <MenuButton icon={UserIcon} label="Profile" />
                             <MenuButton icon={Bell} label="Notifications" />
                             <MenuButton icon={Settings} label="Settings" />
+                            <MenuButton icon={Mail} label="Newsletter" href="/newsletter" />
+                            <MenuButton icon={Newspaper} label="Blogs" href="/blogs" />
                             <MenuButton icon={BookOpen} label="Documentation" href="/documentation" />
                             <MenuButton icon={HelpCircle} label="Help Center" href="/help-center" />
                         </div>

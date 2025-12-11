@@ -1,10 +1,48 @@
 "use client";
 
-import { ArrowLeft, Mail, ArrowRight, Calendar } from "lucide-react";
+import { ArrowLeft, Mail, ArrowRight, Calendar, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function NewsletterPage() {
     const router = useRouter();
+    const [email, setEmail] = useState("");
+    const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+    const [message, setMessage] = useState("");
+    const supabase = createClient();
+
+    const handleSubscribe = async () => {
+        if (!email || !email.includes('@')) {
+            setStatus("error");
+            setMessage("Please enter a valid email address.");
+            return;
+        }
+
+        setStatus("loading");
+        try {
+            const { error } = await supabase
+                .from('subscribers')
+                .insert([{ email }]);
+
+            if (error) {
+                if (error.code === '23505') { // Unique violation
+                    setStatus("error");
+                    setMessage("You are already subscribed!");
+                } else {
+                    throw error;
+                }
+            } else {
+                setStatus("success");
+                setMessage("Thanks for subscribing! Check your inbox soon.");
+                setEmail("");
+            }
+        } catch (error) {
+            console.error("Subscription error:", error);
+            setStatus("error");
+            setMessage("Something went wrong. Please try again.");
+        }
+    };
 
     return (
         <div className="min-h-screen bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans selection:bg-purple-500 selection:text-white">
@@ -39,16 +77,31 @@ export default function NewsletterPage() {
                         Join 10,000+ marketers getting the latest AI trends, tips, and strategies delivered straight to their inbox.
                     </p>
 
-                    {/* Subscribe Form (Visual Only) */}
-                    <div className="max-w-md mx-auto flex gap-2">
-                        <input
-                            type="email"
-                            placeholder="Enter your email"
-                            className="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all"
-                        />
-                        <button className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold rounded-xl hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors shadow-lg hover:shadow-xl">
-                            Subscribe
-                        </button>
+                    {/* Subscribe Form */}
+                    <div className="max-w-md mx-auto flex flex-col gap-2">
+                        <div className="flex gap-2">
+                            <input
+                                type="email"
+                                placeholder="Enter your email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                disabled={status === "loading" || status === "success"}
+                                className="flex-1 px-4 py-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all disabled:opacity-50"
+                                onKeyDown={(e) => e.key === 'Enter' && handleSubscribe()}
+                            />
+                            <button
+                                onClick={handleSubscribe}
+                                disabled={status === "loading" || status === "success"}
+                                className="px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-black font-bold rounded-xl hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center gap-2 min-w-[120px] justify-center"
+                            >
+                                {status === "loading" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Subscribe"}
+                            </button>
+                        </div>
+                        {message && (
+                            <p className={`text-sm mt-2 ${status === "error" ? "text-red-500" : "text-green-500"}`}>
+                                {message}
+                            </p>
+                        )}
                     </div>
                     <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-4">
                         No spam, unsubscribe at any time.

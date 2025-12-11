@@ -1,0 +1,4 @@
+project_id = "INSERT-YOUR-PROJECT-ID-HERE"
+
+[functions.send-newsletter]
+verify_jwt = false # Set validation to false if triggered by scheduled internal event

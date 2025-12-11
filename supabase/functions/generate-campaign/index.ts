@@ -104,20 +104,22 @@ serve(async (req) => {
     `;
 
         const userPrompt = `Campaign Goal: ${goal}\nTiming: ${date_range || 'Immediate'}`;
-        const model = "meta-llama/Meta-Llama-3-8B-Instruct";
+        const model = "mistralai/Mistral-7B-Instruct-v0.3";
         const startTime = Date.now();
 
         // 4. Call LLM
         const HUGGINGFACE_API_KEY = Deno.env.get('HUGGINGFACE_API_KEY');
 
-        const hfResponse = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+        const finalPrompt = `[INST] ${systemPrompt}\n\n${userPrompt} [/INST]`;
+
+        const hfResponse = await fetch(`https://router.huggingface.co/models/${model}`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                inputs: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n${systemPrompt}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${userPrompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`,
+                inputs: finalPrompt,
                 parameters: {
                     max_new_tokens: 1000,
                     temperature: 0.8,

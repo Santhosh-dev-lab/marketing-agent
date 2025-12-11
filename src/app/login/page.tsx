@@ -15,6 +15,7 @@ export default function LoginPage() {
     const [error, setError] = useState<string | null>(null);
     const [isSignUp, setIsSignUp] = useState(false);
     const [emailSentState, setEmailSentState] = useState(false); // Dedicated state for email sent view
+    const [otp, setOtp] = useState(""); // OTP state
 
     const router = useRouter();
     const supabase = createClient();
@@ -53,33 +54,12 @@ export default function LoginPage() {
                     email,
                     password,
                     options: {
-                        emailRedirectTo: `${origin}/auth/callback?next=/verified&email=${encodeURIComponent(email)}`,
+                        emailRedirectTo: `${origin}/auth/callback?email=${encodeURIComponent(email)}`,
                     },
                 });
                 if (error) throw error;
                 setEmailSentState(true);
-
-                // Polling for verification
-                if (data.session) {
-                    const interval = setInterval(async () => {
-                        try {
-                            const { data: { session }, error } = await supabase.auth.refreshSession();
-                            if (error) {
-                                console.log("Refresh error, ignoring:", error.message);
-                                return;
-                            }
-                            // If we have a verified email, redirect
-                            if (session?.user?.email_confirmed_at) {
-                                clearInterval(interval);
-                                setIsGlobalLoading(true);
-                                router.push("/");
-                                router.refresh();
-                            }
-                        } catch (e) {
-                            console.error("Polling error:", e);
-                        }
-                    }, 2000);
-                }
+                // Polling removed in favor of OTP check
 
             } else {
                 const { error } = await supabase.auth.signInWithPassword({
@@ -103,6 +83,30 @@ export default function LoginPage() {
         }
     };
 
+    const handleVerifyOtp = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const { error } = await supabase.auth.verifyOtp({
+                email,
+                token: otp,
+                type: 'signup'
+            });
+
+            if (error) throw error;
+
+            setIsGlobalLoading(true);
+            router.push("/");
+            router.refresh();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     // Auto-refresh for Verified Users
     useEffect(() => {
         const checkUser = async () => {
@@ -118,24 +122,7 @@ export default function LoginPage() {
 
     return (
         <div className="min-h-screen flex bg-white dark:bg-[#030303] text-zinc-900 dark:text-white selection:bg-purple-500/30 font-sans transition-colors duration-300">
-            {/* Global Loading Overlay */}
-            <AnimatePresence>
-                {isGlobalLoading && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-black/90 backdrop-blur-sm"
-                    >
-                        <div className="flex flex-col items-center gap-4">
-                            <Loader2 className="w-10 h-10 animate-spin text-purple-600" />
-                            <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400 animate-pulse">
-                                Securely logging you in...
-                            </p>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+
 
             {/* Left Side: Form */}
             <motion.div
@@ -144,7 +131,25 @@ export default function LoginPage() {
                 transition={{ duration: 0.5, ease: "easeOut" }}
                 className="w-full lg:w-[45%] flex flex-col justify-center items-center px-8 lg:px-20 relative z-10"
             >
-                <div className="w-full max-w-[400px] space-y-8">
+                <div className="w-full max-w-[400px] space-y-8 relative">
+                    {/* Scoped Loading Overlay */}
+                    <AnimatePresence>
+                        {isGlobalLoading && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-black/80 backdrop-blur-sm rounded-2xl"
+                            >
+                                <div className="flex flex-col items-center gap-4">
+                                    <Loader2 className="w-10 h-10 animate-spin text-purple-600" />
+                                    <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400 animate-pulse">
+                                        Securely logging you in...
+                                    </p>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                     {!emailSentState ? (
                         <>
                             <div className="text-center lg:text-left space-y-2">
@@ -316,34 +321,54 @@ export default function LoginPage() {
                             </div>
                             <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">Check your inbox</h3>
                             <p className="text-sm text-zinc-600 dark:text-gray-400 mb-6 font-medium">
-                                We've sent a verification link to <span className="text-zinc-900 dark:text-white font-semibold">{email}</span>.
+                                We've sent a verification code to <span className="text-zinc-900 dark:text-white font-semibold">{email}</span>.
                             </p>
-                            <div className="flex items-center justify-center gap-2 text-xs text-zinc-500 dark:text-neutral-500 mb-6 bg-zinc-100 dark:bg-black/40 py-2 rounded-lg">
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                <span>Waiting for verification...</span>
-                            </div>
-                            <div className="space-y-3">
+
+                            <form onSubmit={handleVerifyOtp} className="space-y-4">
+                                <input
+                                    type="text"
+                                    required
+                                    value={otp}
+                                    onChange={(e) => setOtp(e.target.value)}
+                                    className="w-full bg-white dark:bg-[#0A0A0A] border border-zinc-200 dark:border-neutral-800 rounded-xl px-4 py-3 text-center text-lg tracking-widest font-mono text-zinc-900 dark:text-white focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 outline-none transition-all placeholder:text-zinc-300 dark:placeholder:text-zinc-700"
+                                    placeholder="123456"
+                                    maxLength={6}
+                                />
+                                {error && (
+                                    <div className="text-sm text-red-600 bg-red-50 dark:bg-red-500/10 p-2 rounded-lg">
+                                        {error}
+                                    </div>
+                                )}
                                 <button
-                                    onClick={() => {
-                                        setIsSignUp(false);
-                                        setEmailSentState(false);
-                                        setError(null);
-                                    }}
-                                    className="w-full bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-neutral-200 font-bold rounded-xl py-3 transition-all duration-200 text-sm shadow-sm"
+                                    type="submit"
+                                    disabled={isLoading}
+                                    className="w-full bg-zinc-900 dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-neutral-200 font-bold rounded-xl py-3 transition-all duration-200 text-sm shadow-sm flex items-center justify-center gap-2"
                                 >
-                                    I've Verified, Sign In Now
+                                    {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify & Sign In"}
                                 </button>
-                                <button onClick={() => setEmailSentState(false)} className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
-                                    Use a different email
-                                </button>
-                            </div>
+                            </form>
+
+                            <button
+                                onClick={() => {
+                                    setIsSignUp(false);
+                                    setEmailSentState(false);
+                                    setError(null);
+                                    setOtp("");
+                                }}
+                                className="mt-4 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-2"
+                            >
+                                Back to Login
+                            </button>
                         </motion.div>
-                    )}
-                </div>
-            </motion.div>
+
+
+                    )
+                    }
+                </div >
+            </motion.div >
 
             {/* Right Side: Branding */}
-            <div className="hidden lg:flex w-[55%] relative overflow-hidden bg-zinc-50 dark:bg-[#0A0A0A] items-center justify-center p-12 border-l border-zinc-200 dark:border-white/5">
+            < div className="hidden lg:flex w-[55%] relative overflow-hidden bg-zinc-50 dark:bg-[#0A0A0A] items-center justify-center p-12 border-l border-zinc-200 dark:border-white/5" >
                 <div className="absolute inset-0 overflow-hidden">
                     <div className="absolute -top-1/4 -right-1/4 w-[800px] h-[800px] bg-purple-600/10 dark:bg-purple-600/20 opacity-40 blur-[120px] rounded-full animate-pulse-slow mix-blend-screen" />
                     <div className="absolute -bottom-1/4 -left-1/4 w-[800px] h-[800px] bg-blue-600/10 opacity-40 blur-[120px] rounded-full mix-blend-screen" />
@@ -382,7 +407,7 @@ export default function LoginPage() {
                         </div>
                     </motion.div>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

@@ -22,6 +22,19 @@ export default function LoginPage() {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
+        const errorMsg = params.get('error');
+        const viewParam = params.get('view'); // Check for view param (e.g. 'signup')
+
+        // Handle Errors from URL
+        if (errorMsg) {
+            setError(decodeURIComponent(errorMsg));
+        }
+
+        // Handle View Switching (e.g. force signup view)
+        if (viewParam === 'signup') {
+            setIsSignUp(true);
+        }
+
         if (params.get('verified') === 'true') {
             setError("Email successfully verified! Please log in.");
             // Optional: change style of error to success
@@ -79,7 +92,12 @@ export default function LoginPage() {
                 router.refresh();
             }
         } catch (err: any) {
-            setError(err.message);
+            // Customize error messages
+            let msg = err.message;
+            if (msg.includes("Invalid login credentials")) {
+                msg = "Account not found or incorrect password. If you are new, please Sign Up.";
+            }
+            setError(msg);
         } finally {
             setIsLoading(false);
         }
@@ -146,10 +164,15 @@ export default function LoginPage() {
                                     onClick={async () => {
                                         setIsLoading(true);
                                         const origin = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : '';
+
+                                        // Set cookie for strict auth intent (valid for 5 minutes)
+                                        const intent = isSignUp ? 'signup' : 'signin';
+                                        document.cookie = `auth_intent=${intent}; path=/; max-age=300`;
+
                                         const { error } = await supabase.auth.signInWithOAuth({
                                             provider: 'google',
                                             options: {
-                                                redirectTo: `${origin}/auth/callback?next=/verified`,
+                                                redirectTo: `${origin}/auth/callback`, // Clean URL to match Supabase allow list
                                                 queryParams: {
                                                     access_type: 'offline',
                                                     prompt: 'consent',

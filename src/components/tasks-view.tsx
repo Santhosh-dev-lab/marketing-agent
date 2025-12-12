@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, Search, Filter, CheckCircle2, Clock, AlertCircle, MoreHorizontal, UserPlus, Mail } from "lucide-react";
+import { Plus, Search, Filter, CheckCircle2, Clock, AlertCircle, MoreHorizontal, UserPlus, Mail, Globe } from "lucide-react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -14,6 +14,7 @@ interface Task {
     priority: 'low' | 'medium' | 'high' | 'critical';
     assignee_email?: string;
     due_date?: string;
+    source_url?: string;
     created_at: string;
 }
 
@@ -208,6 +209,18 @@ export function TasksView({ brandId }: { brandId: string }) {
                                                     <Mail className="w-3 h-3" />
                                                     {task.assignee_email}
                                                 </span>
+                                            )}
+                                            {task.source_url && (
+                                                <a 
+                                                    href={task.source_url} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer" 
+                                                    className="flex items-center gap-1 text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full hover:underline"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <Globe className="w-3 h-3" />
+                                                    {new URL(task.source_url).hostname}
+                                                </a>
                                             )}
                                         </div>
                                     </div>

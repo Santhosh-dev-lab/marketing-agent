@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { UserNav } from "@/components/user-nav";
 import { HeroSection } from "@/components/home/hero-section";
 import { FeaturesSection } from "@/components/home/features-section";
-import { OnboardingModal } from "@/components/onboarding-modal";
+
 import { LoadingButton } from "@/components/ui/loading-button";
 
 export default async function Home() {
@@ -96,8 +96,7 @@ export default async function Home() {
 
         <HeroSection user={user} />
 
-        {/* Onboarding Logic: Show if user is logged in and misses strategy */}
-        {user && <OnboardingModal user={user} />}
+        {/* Onboarding Logic Removed: Replaced with Dashboard Reminder Card */}
 
         <FeaturesSection />
       </main>

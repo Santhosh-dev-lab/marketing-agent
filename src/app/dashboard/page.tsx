@@ -23,14 +23,8 @@ export default function DashboardPage() {
                 
                 if (brand) {
                     setBrandId(brand.id);
-                    // Open modal if strategy is missing
-                    if (!brand.audience_persona || Object.keys(brand.audience_persona).length === 0) {
-                        // Check if user previously skipped (optional: store in local storage)
-                        const skipped = localStorage.getItem(`skip_onboarding_${brand.id}`);
-                        if (!skipped) {
-                            setShowOnboarding(true);
-                        }
-                    }
+                    // Automatic popup disabled per user request. 
+                    // We now rely on the BrandDetailsReminder component.
                 }
             } catch (e) {
                 console.error(e);

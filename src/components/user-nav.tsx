@@ -106,7 +106,7 @@ export function UserNav({ user }: UserNavProps) {
                             <div className="p-2 space-y-0.5">
                                 <MenuButton icon={UserIcon} label="Profile" />
                                 <MenuButton icon={Bell} label="Notifications" />
-                                <MenuButton icon={Settings} label="Strategy Settings" href="/dashboard/settings" />
+                                <MenuButton icon={Settings} label="Brand Details" href="/dashboard/settings" />
                                 <MenuButton icon={Lock} label="Account Security" href="/account/security" />
                                 <MenuButton icon={Mail} label="Newsletter" href="/newsletter" />
                                 <MenuButton icon={Newspaper} label="Blogs" href="/blogs" />

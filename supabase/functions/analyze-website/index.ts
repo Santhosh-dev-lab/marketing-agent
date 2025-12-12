@@ -144,7 +144,8 @@ serve(async (req) => {
             title: t.title,
             description: t.description,
             priority: ['high', 'medium', 'low', 'critical'].includes(t.priority?.toLowerCase()) ? t.priority.toLowerCase() : 'medium',
-            status: 'todo'
+            status: 'todo',
+            source_url: website_url
         }));
 
         const { error: insertError } = await supabase.from('tasks').insert(taskInserts);

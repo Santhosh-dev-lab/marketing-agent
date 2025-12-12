@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, ArrowRight, Mail, Lock, CheckCircle2 } from "lucide-react";
-import { getURL } from "@/lib/utils";
 
 export default function LoginPage() {
     const [email, setEmail] = useState("");
@@ -14,31 +13,26 @@ export default function LoginPage() {
     const [isGlobalLoading, setIsGlobalLoading] = useState(false); // For full screen overlay
     const [error, setError] = useState<string | null>(null);
     const [isSignUp, setIsSignUp] = useState(false);
+    const [isMagicLink, setIsMagicLink] = useState(false); // Toggle for OTP Login
     const [emailSentState, setEmailSentState] = useState(false); // Dedicated state for email sent view
     const [otp, setOtp] = useState(""); // OTP state
 
     const router = useRouter();
     const supabase = createClient();
-    // Move access to searchParams inside useEffect or useSearchParams hook to be safe, but for now accessing via window in useEffect is safer for hydration
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const errorMsg = params.get('error');
-        const viewParam = params.get('view'); // Check for view param (e.g. 'signup')
+        const viewParam = params.get('view'); 
 
-        // Handle Errors from URL
         if (errorMsg) {
             setError(decodeURIComponent(errorMsg));
         }
-
-        // Handle View Switching (e.g. force signup view)
         if (viewParam === 'signup') {
             setIsSignUp(true);
         }
-
         if (params.get('verified') === 'true') {
             setError("Email successfully verified! Please log in.");
-            // Optional: change style of error to success
         }
     }, []);
 
@@ -56,9 +50,8 @@ export default function LoginPage() {
                     setIsLoading(false);
                     return;
                 }
-
                 const origin = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : '';
-                const { data, error } = await supabase.auth.signUp({
+                const { error } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
@@ -67,9 +60,20 @@ export default function LoginPage() {
                 });
                 if (error) throw error;
                 setEmailSentState(true);
-                // Polling removed in favor of OTP check
+
+            } else if (isMagicLink) {
+                // Handle Magic Link (OTP) Login
+                const { error } = await supabase.auth.signInWithOtp({
+                    email,
+                    options: {
+                        shouldCreateUser: false, 
+                    }
+                });
+                if (error) throw error;
+                setEmailSentState(true); 
 
             } else {
+                // Password Login
                 const { error } = await supabase.auth.signInWithPassword({
                     email,
                     password,
@@ -80,10 +84,11 @@ export default function LoginPage() {
                 router.refresh();
             }
         } catch (err: any) {
-            // Customize error messages
             let msg = err.message;
             if (msg.includes("Invalid login credentials")) {
-                msg = "Account not found or incorrect password. If you are new, please Sign Up.";
+                msg = "Incorrect password. If you signed up with Google, please use the button above or request a login code.";
+            } else if (msg.includes("User not found") || msg.includes("Signups not allowed")) {
+                 msg = "Account not found. Please Sign Up first.";
             }
             setError(msg);
         } finally {
@@ -97,13 +102,34 @@ export default function LoginPage() {
         setError(null);
 
         try {
+            // For Verify OTP, we try 'signup' if we are in signup confirmation mode
+            // Or 'magiclink'/'email' if we are in login mode.
+            // But signInWithOtp sends a 'magiclink' (email) type usually with `otp`? 
+            // Actually `verifyOtp({ type: 'magiclink', token })` works for links. For codes, it's usually `type: 'email'`.
+            // Supabase recently unified these.
+            
+            // Determine the correct verification type
+            // 'signup' for new users, 'magiclink' for passwordless login (existing users)
+            const type = isSignUp ? 'signup' : 'magiclink'; 
+
+            console.log(`Verifying OTP: ${email}, ${otp}, type: ${type}`);
+
             const { error } = await supabase.auth.verifyOtp({
                 email,
                 token: otp,
-                type: 'signup'
+                type: type 
             });
 
-            if (error) throw error;
+            // Fallback for edge cases where 'email' might be required (unlikely for login, but safe)
+            if (error) {
+                console.warn("First verify failed, trying fallback type: email");
+                 const { error: error2 } = await supabase.auth.verifyOtp({
+                    email,
+                    token: otp,
+                    type: 'email'
+                });
+                if (error2) throw error;
+            }
 
             setIsGlobalLoading(true);
             router.push("/");
@@ -172,24 +198,20 @@ export default function LoginPage() {
                             </div>
 
                             <div className="space-y-4">
+                                {/* Google Button */}
                                 <button
                                     type="button"
                                     onClick={async () => {
                                         setIsLoading(true);
                                         const origin = (typeof window !== 'undefined' && window.location.origin) ? window.location.origin : '';
-
-                                        // Set cookie for strict auth intent (valid for 5 minutes)
                                         const intent = isSignUp ? 'signup' : 'signin';
                                         document.cookie = `auth_intent=${intent}; path=/; max-age=300`;
 
                                         const { error } = await supabase.auth.signInWithOAuth({
                                             provider: 'google',
                                             options: {
-                                                redirectTo: `${origin}/auth/callback`, // Clean URL to match Supabase allow list
-                                                queryParams: {
-                                                    access_type: 'offline',
-                                                    prompt: 'consent',
-                                                },
+                                                redirectTo: `${origin}/auth/callback`, 
+                                                queryParams: { access_type: 'offline', prompt: 'consent' },
                                             },
                                         });
                                         if (error) {
@@ -205,22 +227,10 @@ export default function LoginPage() {
                                     ) : (
                                         <>
                                             <svg className="w-5 h-5" viewBox="0 0 24 24">
-                                                <path
-                                                    fill="currentColor"
-                                                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                                                />
-                                                <path
-                                                    fill="currentColor"
-                                                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                                                />
-                                                <path
-                                                    fill="currentColor"
-                                                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                                                />
-                                                <path
-                                                    fill="currentColor"
-                                                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                                                />
+                                                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                                                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                                             </svg>
                                             Continue with Google
                                         </>
@@ -233,7 +243,7 @@ export default function LoginPage() {
                                     </div>
                                     <div className="relative flex justify-center text-xs uppercase">
                                         <span className="bg-white dark:bg-[#030303] px-2 text-zinc-400 dark:text-neutral-500 font-medium">
-                                            Or continue with email
+                                            Or continue with {isMagicLink ? "Logic Code" : "email"}
                                         </span>
                                     </div>
                                 </div>
@@ -257,30 +267,52 @@ export default function LoginPage() {
                                             />
                                         </div>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <label className="block text-xs font-semibold text-zinc-700 dark:text-neutral-300 ml-1 uppercase tracking-wider">Password</label>
-                                        <div className="relative group">
-                                            <div className="absolute left-3 top-3.5 text-zinc-400 dark:text-neutral-500 group-focus-within:text-purple-600 dark:group-focus-within:text-purple-400 transition-colors">
-                                                <Lock className="w-5 h-5" />
+
+                                    {/* Password Field - Only if NOT Magic Link */}
+                                    {!isMagicLink && (
+                                        <div className="space-y-1.5">
+                                            <div className="flex justify-between items-center">
+                                                <label className="block text-xs font-semibold text-zinc-700 dark:text-neutral-300 ml-1 uppercase tracking-wider">Password</label>
+                                                {!isSignUp && (
+                                                    <button type="button" onClick={() => { setIsMagicLink(true); setError(null); }} className="text-xs text-purple-600 hover:text-purple-500 font-medium">
+                                                        Forgot password / Login with Verify Code
+                                                    </button>
+                                                )}
                                             </div>
-                                            <input
-                                                type="password"
-                                                required
-                                                value={password}
-                                                onChange={(e) => setPassword(e.target.value)}
-                                                className="w-full bg-white dark:bg-[#1A1A1A] border border-zinc-200 dark:border-neutral-800 rounded-xl px-4 py-3.5 pl-10 text-sm text-zinc-900 dark:text-white focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 hover:border-zinc-400 dark:hover:border-neutral-700 outline-none transition-all placeholder:text-zinc-400 dark:placeholder:text-neutral-600 shadow-sm"
-                                                placeholder="••••••••••••"
-                                            />
+                                            <div className="relative group">
+                                                <div className="absolute left-3 top-3.5 text-zinc-400 dark:text-neutral-500 group-focus-within:text-purple-600 dark:group-focus-within:text-purple-400 transition-colors">
+                                                    <Lock className="w-5 h-5" />
+                                                </div>
+                                                <input
+                                                    type="password"
+                                                    required={!isMagicLink}
+                                                    value={password}
+                                                    onChange={(e) => setPassword(e.target.value)}
+                                                    className="w-full bg-white dark:bg-[#1A1A1A] border border-zinc-200 dark:border-neutral-800 rounded-xl px-4 py-3.5 pl-10 text-sm text-zinc-900 dark:text-white focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 hover:border-zinc-400 dark:hover:border-neutral-700 outline-none transition-all placeholder:text-zinc-400 dark:placeholder:text-neutral-600 shadow-sm"
+                                                    placeholder="••••••••••••"
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
+
+                                    {/* Link to Toggle Magic Link Mode */}
+                                    {!isSignUp && isMagicLink && (
+                                        <div className="flex justify-end">
+                                             <button type="button" onClick={() => { setIsMagicLink(false); setError(null); }} className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
+                                                Use Password instead
+                                            </button>
+                                        </div>
+                                    )}
+
                                     {isSignUp && password && (
                                         <motion.div
                                             initial={{ opacity: 0, height: 0 }}
                                             animate={{ opacity: 1, height: "auto" }}
                                             className="space-y-2 pt-2"
                                         >
+                                            {/* (Password Strength Indicator) */}
                                             <p className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Password strength:</p>
-                                            <div className="grid grid-cols-2 gap-2">
+                                             <div className="grid grid-cols-2 gap-2">
                                                 {[
                                                     { label: "8+ chars", valid: password.length >= 8 },
                                                     { label: "Lowercase", valid: /[a-z]/.test(password) },
@@ -322,7 +354,7 @@ export default function LoginPage() {
                                         <Loader2 className="w-5 h-5 animate-spin" />
                                     ) : (
                                         <>
-                                            {isSignUp ? "Create Account" : "Sign In"}
+                                            {isSignUp ? "Create Account" : (isMagicLink ? "Send Login Code" : "Sign In")}
                                             <ArrowRight className="w-4 h-4" />
                                         </>
                                     )}
@@ -337,6 +369,7 @@ export default function LoginPage() {
                                         onClick={() => {
                                             setIsSignUp(!isSignUp);
                                             setError(null);
+                                            setIsMagicLink(false);
                                         }}
                                         className="text-zinc-900 dark:text-white hover:text-purple-600 dark:hover:text-purple-400 font-medium transition-colors ml-1"
                                     >
@@ -402,47 +435,91 @@ export default function LoginPage() {
                 </div >
             </motion.div >
 
-            {/* Right Side: Branding */}
-            < div className="hidden lg:flex w-[55%] relative overflow-hidden bg-zinc-50 dark:bg-[#0A0A0A] items-center justify-center p-12 border-l border-zinc-200 dark:border-white/5" >
-                <div className="absolute inset-0 overflow-hidden">
-                    <div className="absolute -top-1/4 -right-1/4 w-[800px] h-[800px] bg-purple-600/10 dark:bg-purple-600/20 opacity-40 blur-[120px] rounded-full animate-pulse-slow mix-blend-screen" />
-                    <div className="absolute -bottom-1/4 -left-1/4 w-[800px] h-[800px] bg-blue-600/10 opacity-40 blur-[120px] rounded-full mix-blend-screen" />
+             {/* Right Side: Branding (Lottie Animation) */}
+             <div className="hidden lg:flex w-[55%] relative overflow-hidden bg-[#020202] items-center justify-center p-12 border-l border-zinc-800">
+                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    {/* Radial Soft Background */}
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900/50 via-[#050505] to-[#020202]" />
+                    
                     {/* Grid Pattern */}
-                    <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
-                </div>
-
-                <div className="relative z-10 max-w-lg">
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2, duration: 0.8, ease: "easeOut" }}
-                        className="backdrop-blur-xl bg-white/40 dark:bg-white/5 border border-white/20 dark:border-white/10 p-10 rounded-3xl shadow-2xl"
+                    <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-[0.15] invert dark:invert-0 [mask-image:radial-gradient(ellipse_at_center,white_30%,transparent_70%)]" />
+                    
+                    {/* Animated Aurora Blobs */}
+                    <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-purple-600/30 blur-[100px] rounded-full mix-blend-screen animate-pulse" style={{ animationDuration: '6s' }} />
+                    <div className="absolute bottom-[-10%] left-[-5%] w-[600px] h-[600px] bg-indigo-600/30 blur-[100px] rounded-full mix-blend-screen animate-pulse" style={{ animationDuration: '8s', animationDelay: '1s' }} />
+                    <div className="absolute top-[40%] left-[30%] w-[400px] h-[400px] bg-pink-600/20 blur-[120px] rounded-full mix-blend-screen animate-pulse" style={{ animationDuration: '7s', animationDelay: '2s' }} />
+                 </div>
+                 
+                 <div className="relative z-10 flex flex-col items-center text-center max-w-xl w-full">
+                    {/* Lottie Animation Container */}
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.8, ease: "easeOut" }}
+                        className="w-full max-w-[500px] aspect-[4/3] mb-10 flex items-center justify-center"
                     >
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-purple-500 to-pink-500 mb-8 flex items-center justify-center">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white"><path d="M12 2v20M2 12h20M12 2l4 4M12 22l-4-4" /></svg>
-                        </div>
+                        <LottieAnimation />
+                    </motion.div>
 
-                        <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-[1.1] tracking-tight text-zinc-900 dark:text-white">
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4, duration: 0.8 }}
+                    >
+                        <h1 className="text-4xl md:text-5xl font-bold mb-5 tracking-tight text-white leading-tight">
                             Marketing <br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 via-pink-600 to-zinc-900 dark:from-purple-400 dark:via-pink-400 dark:to-white">
-                                Autopilot.
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-indigo-400">
+                                Autopilot
                             </span>
                         </h1>
-                        <p className="text-lg text-zinc-600 dark:text-neutral-400 leading-relaxed mb-8">
-                            "The most powerful tool for modern brands. It feels less like software and more like a creative partner."
+                        <p className="text-lg text-zinc-400 max-w-md mx-auto leading-relaxed">
+                            "The most powerful tool for modern brands to automate strategy and content."
                         </p>
-
-                        {/* Feature Pills */}
-                        <div className="flex flex-wrap gap-2">
-                            {['Brand Twin™', 'Auto-Scheduler', 'AI Copywriting', 'Asset Locker'].map((tag, i) => (
-                                <div key={i} className="px-3 py-1.5 rounded-full bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-xs font-medium text-zinc-600 dark:text-neutral-300 hover:bg-white/50 dark:hover:bg-white/10 transition-colors cursor-default">
-                                    {tag}
-                                </div>
-                            ))}
-                        </div>
                     </motion.div>
-                </div>
-            </div >
-        </div >
+                 </div>
+            </div>
+        </div>
     );
+}
+
+function LottieAnimation() {
+    const defaultOptions = {
+        loop: true,
+        autoplay: true, 
+        path: '/animation.json', // User will place file here
+        rendererSettings: {
+            preserveAspectRatio: 'xMidYMid slice'
+        }
+    };
+
+    // We use a dynamic import for Lottie to avoid SSR issues if any, 
+    // but lottie-react works fine usually. 
+    // However, since we need to fetch the JSON or just use the player, let's use the component.
+    // NOTE: lottie-react component takes `animationData`. 
+    // If we want to use a URL path (like /animation.json), we might need to fetch it or use a player that supports paths.
+    // lottie-react's `Lottie` component primarily takes `animationData` (json object).
+    // To support a path from public folder, we can fetch it or just instruct user to replace the import.
+    // BUT the user said "i will place that animation json in public folder".
+    // Many Lottie libs support `path` prop. `lottie-react` (v2) uses `animationData`.
+    // Let's try to fetch it or just use a placeholder if they haven't put it there yet.
+    // actually `lottie-web` supports path. `lottie-react` wraps it.
+    
+    // Let's implement a safe fetcher for the client side.
+    
+    const [animationData, setAnimationData] = useState<any>(null);
+
+    useEffect(() => {
+        fetch('/animation.json')
+            .then(res => {
+                if (!res.ok) throw new Error("Failed to load");
+                return res.json();
+            })
+            .then(data => setAnimationData(data))
+            .catch(err => console.log("Waiting for animation.json in /public..."));
+    }, []);
+
+    if (!animationData) return <div className="w-full h-full flex items-center justify-center text-zinc-800">Animation Placeholder</div>;
+
+    const Lottie = require("lottie-react").default;
+    return <Lottie animationData={animationData} loop={true} />;
 }

@@ -1,0 +1,141 @@
+
+## 6. Troubleshooting: "Expected 1536 dimensions, not 384"
+
+If you see an error like `Error: expected 1536 dimensions, not 384`, it means your database was set up for OpenAI embeddings (1536 dims), but our new local model produces smaller, faster vectors (384 dims).
+
+**Fix**: Run this SQL in your [Supabase SQL Editor](https://supabase.com/dashboard/project/_/sql) to resize the column:
+
+```sql
+-- 1. Resize the vector column
+ALTER TABLE public.memories 
+ALTER COLUMN embedding TYPE vector(384);
+
+-- 2. Update the search function to match
+CREATE OR REPLACE FUNCTION match_memories (
+  query_embedding vector(384),
+  match_threshold float,
+  match_count int,
+  p_brand_id uuid
+)
+RETURNS TABLE (
+  id uuid,
+  content text,
+  similarity float
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    memories.id,
+    memories.content,
+    1 - (memories.embedding <=> query_embedding) AS similarity
+  FROM memories
+  WHERE 1 - (memories.embedding <=> query_embedding) > match_threshold
+  AND memories.brand_id = p_brand_id
+  ORDER BY memories.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
+```
+
+## 7. Migration: Brand Settings & Analytics (Dec 12, 2025)
+
+To enable the new Brand Settings (Other option) and Analytics Dashboard, please run the following SQL in your Supabase SQL Editor:
+
+```sql
+-- 1. Brand Settings Extensions
+alter table public.brands 
+add column if not exists industry text,
+add column if not exists location text,
+add column if not exists primary_goal text,
+add column if not exists tone_voice text, 
+add column if not exists emoji_usage text, 
+add column if not exists language text default 'English',
+add column if not exists key_adjectives jsonb default '[]'::jsonb, 
+add column if not exists social_handles jsonb default '{}'::jsonb, 
+add column if not exists forbidden_words jsonb default '[]'::jsonb, 
+add column if not exists brand_color text default '#000000';
+
+-- 2. Analytics Table
+create table if not exists public.brand_analytics (
+    id uuid default gen_random_uuid() primary key,
+    brand_id uuid references public.brands(id) on delete cascade not null,
+    date date not null default current_date,
+    platform text not null check (platform in ('instagram', 'twitter', 'linkedin', 'website')),
+    followers int default 0,
+    reach int default 0,
+    engagement int default 0,
+    sales int default 0,
+    created_at timestamptz default now(),
+    unique(brand_id, platform, date)
+);
+
+-- 3. Analytics RLS
+alter table public.brand_analytics enable row level security;
+create policy "Users can view their own brand analytics"
+    on public.brand_analytics for select
+    using ( brand_id in (select id from public.brands where user_id = auth.uid()) );
+create policy "Users can insert their own brand analytics"
+    on public.brand_analytics for insert
+    with check ( brand_id in (select id from public.brands where user_id = auth.uid()) );
+```
+
+## 8. Environment Variables (Required for Analytics)
+
+For the Google Trends integration to work, you must add your SerpApi key to your environment variables.
+
+**Local Development (`.env.local`):**
+```env
+SERPAPI_KEY=your_secret_key_here
+```
+
+**Production (Vercel/Supabase):**
+- Add `SERPAPI_KEY` to your project's Environment Variables settings.
+- (Optional) Add `JINA_API_KEY` to enable the robust Jina AI crawler (free tier available at jina.ai).
+
+## 9. Crawler & Task System Schema (Phase 4)
+
+Run this SQL to create the `tasks` table and ensure the `website` column exists:
+
+```sql
+-- 1. Add 'website' column to brands table
+ALTER TABLE public.brands 
+ADD COLUMN IF NOT EXISTS website TEXT;
+
+-- 2. Create 'tasks' table
+CREATE TABLE IF NOT EXISTS public.tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    brand_id UUID NOT NULL REFERENCES public.brands(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'in_progress', 'done', 'archived')),
+    priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'critical')),
+    assignee_email TEXT,
+    due_date TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. Enable RLS
+ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
+
+-- 4. RLS Policies for Tasks
+CREATE POLICY "Users can view their brand's tasks"
+    ON public.tasks FOR SELECT
+    USING (brand_id IN (SELECT id FROM public.brands WHERE user_id = auth.uid()));
+
+CREATE POLICY "Users can insert tasks for their brand"
+    ON public.tasks FOR INSERT
+    WITH CHECK (brand_id IN (SELECT id FROM public.brands WHERE user_id = auth.uid()));
+
+CREATE POLICY "Users can update their brand's tasks"
+    ON public.tasks FOR UPDATE
+    USING (brand_id IN (SELECT id FROM public.brands WHERE user_id = auth.uid()));
+
+CREATE POLICY "Users can delete their brand's tasks"
+    ON public.tasks FOR DELETE
+    USING (brand_id IN (SELECT id FROM public.brands WHERE user_id = auth.uid()));
+```
+
+

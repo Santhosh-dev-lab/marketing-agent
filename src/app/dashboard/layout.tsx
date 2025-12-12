@@ -1,8 +1,8 @@
 "use client";
 
-import { BarChart3, Box, LayoutDashboard, Settings, ArrowLeft } from "lucide-react";
+import { BarChart3, Box, LayoutDashboard, Settings, ArrowLeft, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -13,21 +13,39 @@ export default function DashboardLayout({
 }) {
     const pathname = usePathname();
     const [credits, setCredits] = useState({ used: 0, left: 12 });
+    const [taskCounts, setTaskCounts] = useState({ critical: 0, inProgress: 0 });
     const supabase = createClient();
 
-    const isActive = (path: string) => pathname === path;
+    const isActive = (path: string) => {
+        if (!pathname) return false;
+        return pathname === path || pathname.startsWith(`${path}/`);
+    };
+
+    const router = useRouter(); 
 
     useEffect(() => {
-        async function fetchCredits() {
+        async function checkAccess() {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
 
-                const { data: brand } = await supabase.from('brands').select('id').eq('user_id', user.id).single();
+                // Fetch Brand & Strategy Data
+                const { data: brand } = await supabase.from('brands').select('id, audience_persona').eq('user_id', user.id).single();
+                
+                // REDIRECT LOGIC: If strategy is missing, force onboarding
+                if (brand && (!brand.audience_persona || Object.keys(brand.audience_persona).length === 0)) {
+                    // Prevent infinite loop if already on onboarding page
+                    if (pathname !== '/dashboard/onboarding') {
+                        router.push('/dashboard/onboarding');
+                        return; // Stop here
+                    }
+                }
+
                 if (!brand) return;
 
+                // Credit Logic
                 const { data: creditRows } = await supabase.from('user_credits').select('credits_remaining').eq('brand_id', brand.id);
-
+                
                 const initiatedAgentsCount = creditRows?.length || 0;
                 // Assuming 4 agent types: strategy, content, visual, brand_twin
                 const totalAgents = 4;
@@ -41,12 +59,26 @@ export default function DashboardLayout({
                 const totalUsed = totalPossible - totalLeft;
 
                 setCredits({ used: totalUsed, left: totalLeft });
+
+                // Task Counts Logic: Critical (Priority) & In Progress (Status)
+                const { data: tasks } = await supabase
+                    .from('tasks')
+                    .select('status, priority')
+                    .eq('brand_id', brand.id)
+                    .neq('status', 'done'); // Ignore completed tasks
+                
+                if (tasks) {
+                    const critical = tasks.filter(t => t.priority === 'critical').length;
+                    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+                    setTaskCounts({ critical, inProgress });
+                }
+
             } catch (e) {
-                console.error("Error fetching credits:", e);
+                console.error("Error in dashboard check:", e);
             }
         }
-        fetchCredits();
-    }, []);
+        checkAccess();
+    }, [pathname]);
 
     return (
         <div className="min-h-screen bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans selection:bg-purple-500 selection:text-white">
@@ -113,6 +145,38 @@ export default function DashboardLayout({
                             Settings
                         </Link>
                     </nav>
+
+                    {/* Tasks Section with Counts */}
+                    <div className="px-3 mt-4 mb-2">
+                         <div className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider px-2 mb-2">Work</div>
+                         <nav className="flex flex-col gap-1">
+                            <Link
+                                href="/dashboard/tasks"
+                                className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition-colors ${isActive('/dashboard/tasks')
+                                    ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-white/10'}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <CheckCircle2 className="w-5 h-5" />
+                                    Tasks
+                                </div>
+                                {(taskCounts.critical > 0 || taskCounts.inProgress > 0) && (
+                                    <div className="flex gap-1 items-center">
+                                        {taskCounts.critical > 0 && (
+                                            <div className="h-5 px-1.5 flex items-center justify-center bg-amber-500 text-white text-[10px] font-bold rounded shadow-sm border border-amber-600/20" title="Critical Tasks">
+                                                C-{taskCounts.critical}
+                                            </div>
+                                        )}
+                                        {taskCounts.inProgress > 0 && (
+                                            <div className="h-5 px-1.5 flex items-center justify-center bg-blue-500 text-white text-[10px] font-bold rounded shadow-sm border border-blue-600/20" title="In Progress">
+                                                P-{taskCounts.inProgress}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </Link>
+                         </nav>
+                    </div>
 
                     <div className="mt-auto flex flex-col gap-4">
                         <div className="p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-200 dark:border-purple-500/20">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { BrandStrategyForm } from "@/components/brand-strategy-form";
+import { BrandSettingsEditor } from "@/components/brand-settings-editor";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 
@@ -33,7 +33,7 @@ export default function OnboardingPage() {
 
     return (
         <div className="min-h-screen bg-zinc-50 dark:bg-black flex flex-col items-center justify-center p-6">
-            <div className="max-w-2xl w-full space-y-8">
+            <div className="max-w-6xl w-full space-y-8">
                 <div className="text-center space-y-4">
                     <div className="inline-flex-center justify-center p-3 bg-purple-100 dark:bg-purple-900/30 rounded-2xl mb-4">
                         <Sparkles className="w-8 h-8 text-purple-600 dark:text-purple-400" />
@@ -44,12 +44,18 @@ export default function OnboardingPage() {
                     </p>
                 </div>
 
-                <BrandStrategyForm 
-                    brandId={brandId} 
-                    onComplete={() => {
-                        router.push('/dashboard/strategy?new=true'); // We'll create this next
-                    }} 
-                />
+                <div className="bg-white dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 shadow-xl">
+                    <BrandSettingsEditor brandId={brandId} />
+                </div>
+                
+                <div className="flex justify-center pt-8">
+                     <button 
+                        onClick={() => router.push('/dashboard')}
+                        className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors"
+                    >
+                        Skip for now &rarr;
+                    </button>
+                </div>
             </div>
         </div>
     );

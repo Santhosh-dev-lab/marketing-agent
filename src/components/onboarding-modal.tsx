@@ -16,6 +16,7 @@ export function OnboardingModal({ user }: { user: User | null }) {
 
         async function checkBrandStrategy() {
             try {
+                if (!user) return;
                 const { data: brand } = await supabase.from('brands').select('id, audience_persona').eq('user_id', user.id).single();
                 
                 if (brand) {

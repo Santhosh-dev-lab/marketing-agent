@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { BrandDetailsReminder } from "@/components/brand-details-reminder";
 
 export default function DashboardLayout({
     children,
@@ -32,14 +33,8 @@ export default function DashboardLayout({
                 // Fetch Brand & Strategy Data
                 const { data: brand } = await supabase.from('brands').select('id, audience_persona').eq('user_id', user.id).single();
                 
-                // REDIRECT LOGIC: If strategy is missing, force onboarding
-                if (brand && (!brand.audience_persona || Object.keys(brand.audience_persona).length === 0)) {
-                    // Prevent infinite loop if already on onboarding page
-                    if (pathname !== '/dashboard/onboarding') {
-                        router.push('/dashboard/onboarding');
-                        return; // Stop here
-                    }
-                }
+                // REDIRECT LOGIC REMOVED: User requested non-blocking onboarding.
+                // We will now handle prompts via non-intrusive reminders in the UI.
 
                 if (!brand) return;
 
@@ -142,7 +137,7 @@ export default function DashboardLayout({
                                 : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-white/10'}`}
                         >
                             <Settings className="w-5 h-5" />
-                            Settings
+                            Brand Details
                         </Link>
                     </nav>
 
@@ -210,6 +205,7 @@ export default function DashboardLayout({
                     {children}
                 </main>
             </div>
+            <BrandDetailsReminder />
         </div>
     );
 }

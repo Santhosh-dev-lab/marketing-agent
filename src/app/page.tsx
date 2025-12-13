@@ -15,9 +15,11 @@ export default async function Home() {
   try {
     const { data } = await supabase.auth.getUser();
     user = data.user;
-  } catch (error) {
-    // Suppress "Invalid Refresh Token" error
-    console.error("Home Page Auth Check Error:", error);
+  } catch (error: any) {
+    // Suppress "Invalid Refresh Token" error which is common when session expires
+    if (error?.code !== 'refresh_token_not_found') {
+      console.error("Home Page Auth Check Error:", error);
+    }
   }
 
   return (

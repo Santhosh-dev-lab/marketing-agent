@@ -43,24 +43,25 @@ const NAV_DATA: MegaMenuData[] = [
             {
                 title: "Core Platform",
                 items: [
-                    { title: "Brand Strategy", href: "/product/strategy", description: "Define your voice and persona", icon: Shield },
-                    { title: "Content Engine", href: "/product/content", description: "Generate blog & social posts", icon: FileText },
-                    { title: "Analytics", href: "/product/analytics", description: "Track performance & ROI", icon: BarChart2 },
+                    { title: "Campaign Manager", href: "/dashboard/campaigns", description: "Create & schedule multi-channel campaigns", icon: Zap },
+                    { title: "Brand Intelligence", href: "/dashboard/brand", description: "Define voice, audience & strategy", icon: Shield },
+                    { title: "Task Center", href: "/dashboard/tasks", description: "AI-driven marketing recommendations", icon: CheckCircle },
                 ]
             },
             {
-                title: "Automation",
+                title: "Analytics & Growth",
                 items: [
-                    { title: "Workflows", href: "/product/workflows", description: "Automate repetitive tasks", icon: Zap },
-                    { title: "Integrations", href: "/product/integrations", description: "Connect with your stack", icon: Globe },
+                    { title: "Performance Dashboard", href: "/dashboard", description: "Real-time metrics & insights", icon: BarChart2 },
+                    { title: "Market Trends", href: "/dashboard/analytics/trends", description: "Analyze competitor data", icon: PieChart },
+                    { title: "Security", href: "/dashboard/security", description: "Enterprise-grade protection", icon: Shield },
                 ]
             }
         ],
         featured: [
              {
-                title: "New Feature: AI Twin",
-                description: "Clone your best writer's style instantly.",
-                href: "/product/ai-twin",
+                title: "AI Analysis",
+                description: "Deep dive into your website's performance automatically.",
+                href: "/dashboard/tasks", // Closest match to "Analysis" 
                 bgColor: "bg-purple-100 dark:bg-purple-900/40"
             }
         ]
@@ -68,36 +69,35 @@ const NAV_DATA: MegaMenuData[] = [
     {
         label: "Solutions",
         type: "mega",
-        // This matches the reference screenshot structure
         columns: [
             {
-                title: "By Team",
+                title: "By Use Case",
                 items: [
-                    { title: "RevOps", href: "/solutions/revops", description: "Enrich & clean CRM data", icon: BarChart2 },
-                    { title: "Sales", href: "/solutions/sales", description: "Automate prospecting", icon: Users },
-                    { title: "Growth Marketing", href: "/solutions/growth", description: "Targeted campaigns", icon: PieChart },
+                    { title: "Content Creation", href: "/dashboard/campaigns", description: "Generate posts at scale", icon: FileText },
+                    { title: "Brand Management", href: "/dashboard/brand", description: "Maintain consistency across channels", icon: Briefcase },
+                    { title: "Strategic Planning", href: "/dashboard/tasks", description: "Actionable AI roadmap", icon: Zap },
                 ]
             },
             {
-                title: "By Company Type",
+                title: "By Team",
                 items: [
-                    { title: "Enterprise", href: "/solutions/enterprise", description: "Data foundation for GTM", icon: Briefcase },
-                    { title: "Startups", href: "/solutions/startups", description: "Launch growth campaigns", icon: Zap },
-                    { title: "Agencies", href: "/solutions/agencies", description: "Scale client delivery", icon: Globe },
+                    { title: "Marketing Agencies", href: "/solutions/agencies", description: "Manage multiple client brands", icon: Globe },
+                    { title: "Founders", href: "/solutions/startups", description: "Automate your first marketing hire", icon: Users },
+                    { title: "Enterprise", href: "/solutions/enterprise", description: "Scale compliance & security", icon: Shield },
                 ]
             }
         ],
         featured: [
             {
-                title: "Vanta Case Study",
-                description: "How Vanta uses MarketingAgent to streamline RevOps.",
-                href: "/case-studies/vanta",
+                title: "Agency Case Study",
+                description: "How BrandX scaled to 50 clients using MarketingAgent.",
+                href: "/case-studies/brandx",
                 bgColor: "bg-indigo-100 dark:bg-indigo-900/40"
             },
              {
-                title: "OpenAI Growth",
-                description: "Scaling GTM motion with AI.",
-                href: "/case-studies/openai",
+                title: "The Solo Founder",
+                description: "Replacing a $10k/mo agency with AI.",
+                href: "/case-studies/founder",
                 bgColor: "bg-green-100 dark:bg-green-900/40"
             }
         ]

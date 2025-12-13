@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Plus, Search, Filter, CheckCircle2, Clock, AlertCircle, MoreHorizontal, UserPlus, Mail, Globe } from "lucide-react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 
 interface Task {
     id: string;
@@ -23,6 +24,7 @@ export function TasksView({ brandId }: { brandId: string }) {
     const [isLoading, setIsLoading] = useState(true);
     const [filter, setFilter] = useState("all");
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
     
     // Create Task Form State
     const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -33,6 +35,32 @@ export function TasksView({ brandId }: { brandId: string }) {
 
     useEffect(() => {
         fetchTasks();
+
+        // Realtime Subscription
+        const channel = supabase
+            .channel('realtime_tasks')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'tasks',
+                filter: `brand_id=eq.${brandId}`
+            }, (payload) => {
+                const newTask = payload.new as Task;
+                const oldTask = payload.old as Task;
+
+                if (payload.eventType === 'INSERT') {
+                    setTasks((current) => [newTask, ...current]);
+                } else if (payload.eventType === 'DELETE') {
+                    setTasks((current) => current.filter(t => t.id !== oldTask.id));
+                } else if (payload.eventType === 'UPDATE') {
+                    setTasks((current) => current.map(t => t.id === newTask.id ? newTask : t));
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [brandId]);
 
     async function fetchTasks() {
@@ -103,6 +131,22 @@ export function TasksView({ brandId }: { brandId: string }) {
         setTaskToDelete(null);
     }
 
+    async function handleClearAll() {
+        // Optimistic UI
+        setTasks([]);
+        setIsClearAllModalOpen(false);
+
+        const { error } = await supabase
+            .from('tasks')
+            .delete()
+            .eq('brand_id', brandId);
+
+        if (error) {
+            alert("Failed to clear tasks");
+            fetchTasks(); // Revert on failure
+        }
+    }
+
     async function handleAssignEmail(taskId: string) {
         const email = prompt("Enter email address to assign this task to:");
         if (!email) return;
@@ -139,13 +183,23 @@ export function TasksView({ brandId }: { brandId: string }) {
                     <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Action Items</h1>
                     <p className="text-zinc-500">Manage your marketing tasks and AI recommendations.</p>
                 </div>
-                <button 
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-medium hover:opacity-90 transition-opacity"
-                >
-                    <Plus className="w-4 h-4" />
-                    New Task
-                </button>
+                <div className="flex items-center gap-3">
+                    {tasks.length > 0 && (
+                        <button 
+                            onClick={() => setIsClearAllModalOpen(true)}
+                            className="px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl font-medium transition-colors text-sm"
+                        >
+                            Clear All
+                        </button>
+                    )}
+                    <button 
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-medium hover:opacity-90 transition-opacity"
+                    >
+                        <Plus className="w-4 h-4" />
+                        New Task
+                    </button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -171,7 +225,9 @@ export function TasksView({ brandId }: { brandId: string }) {
                     <div className="p-8 text-center text-zinc-500">Loading tasks...</div>
                 ) : filteredTasks.length === 0 ? (
                     <div className="p-12 text-center border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl">
-                        <p className="text-zinc-500">No tasks found. Create one or run the Website Analyzer around Settings.</p>
+                        <p className="text-zinc-500">
+                            No tasks found. Create one or run the <Link href="/dashboard/settings" className="text-zinc-900 dark:text-white font-medium underline underline-offset-4 hover:opacity-80">Website Analyzer</Link> in Settings.
+                        </p>
                     </div>
                 ) : (
                     <AnimatePresence>
@@ -253,6 +309,41 @@ export function TasksView({ brandId }: { brandId: string }) {
                     </AnimatePresence>
                 )}
             </div>
+
+            {/* Clear All Confirmation Modal */}
+            {isClearAllModalOpen && (
+                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border border-red-100 dark:border-red-900/30">
+                        <div className="flex flex-col items-center text-center gap-4">
+                            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center text-red-600 dark:text-red-500">
+                                <AlertCircle className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">Clear All Tasks?</h2>
+                                <p className="text-zinc-500 text-sm">
+                                    You are about to delete <strong>{tasks.length} tasks</strong>.
+                                    <br/><br/>
+                                    This action is <strong className="text-red-500">irreversible</strong>.
+                                </p>
+                            </div>
+                            <div className="flex gap-3 w-full mt-2">
+                                <button 
+                                    onClick={() => setIsClearAllModalOpen(false)}
+                                    className="flex-1 px-4 py-2 text-zinc-600 dark:text-zinc-300 font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={handleClearAll}
+                                    className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20"
+                                >
+                                    Delete All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                 </div>
+            )}
 
             {/* Create Modal */}
             {isCreateModalOpen && (

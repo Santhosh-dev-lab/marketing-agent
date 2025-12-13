@@ -59,6 +59,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState("basics");
     const [isSaving, setIsSaving] = useState(false);
+    const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
     
     const supabase = createClient();
     const { register, handleSubmit, reset, setValue, watch } = useForm<any>();
@@ -254,7 +255,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                         )}
                                     </div>
                                 </div>
-                                <div className="space-y-1">
+                                <div className="space-y-1 md:col-span-2">
                                     <label className="text-xs font-semibold uppercase text-zinc-500 tracking-wider">Website URL</label>
                                     <div className="flex gap-2">
                                         <input {...register('website')} placeholder="https://" className="flex-1 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-400" />
@@ -268,15 +269,42 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                                 if(btn) { btn.innerHTML = 'Analyzing...'; (btn as HTMLButtonElement).disabled = true; }
 
                                                 try {
-                                                    const { data: { session } } = await supabase.auth.getSession();
+                                                    let { data: { session } } = await supabase.auth.getSession();
+                                                    
+                                                    // Ensure valid session or refresh
+                                                    if (!session?.access_token) {
+                                                        const { data, error } = await supabase.auth.refreshSession();
+                                                        if (error || !data.session) {
+                                                            alert("Login required: No valid session found.");
+                                                            return;
+                                                        }
+                                                        session = data.session;
+                                                    }
+
+                                                    const token = session.access_token;
+                                                    console.log("[Client] Sending Token:", token.substring(0, 10) + "...");
+                                                    
+                                                    // Sanity check
+                                                    if (!token || token === "undefined") {
+                                                        alert("Critical: Token is invalid/undefined before sending!");
+                                                        return;
+                                                    }
+
                                                     const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/analyze-website`, {
                                                         method: 'POST',
                                                         headers: {
                                                             'Content-Type': 'application/json',
-                                                            'Authorization': `Bearer ${session?.access_token}`
+                                                            'Authorization': `Bearer ${token}`
                                                         },
                                                         body: JSON.stringify({ brand_id: brandId, website_url: url })
                                                     });
+
+                                                    // Handle 402 explicitly
+                                                    if (res.status === 402) {
+                                                        setIsUpgradeModalOpen(true);
+                                                        return;
+                                                    }
+
                                                     const json = await res.json();
                                                     if (json.error) throw new Error(json.error);
                                                     alert(`Success! Generated ${json.tasks?.length} new tasks based on your website.`);
@@ -613,6 +641,62 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
 
                 </form>
             </div>
+            <AnimatePresence>
+                {isUpgradeModalOpen && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden relative flex flex-col md:flex-row"
+                        >
+                            <button 
+                                onClick={() => setIsUpgradeModalOpen(false)}
+                                className="absolute right-4 top-4 z-10 bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors backdrop-blur-md"
+                            >
+                                <svg className="w-5 h-5 text-zinc-500 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+
+                            {/* Image Side */}
+                            <div className="md:w-1/2 relative min-h-[200px] md:min-h-full">
+                                <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: "url('/coming-soon.jpg')" }}></div>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent md:bg-gradient-to-r md:from-transparent md:to-zinc-900"></div>
+                            </div>
+
+                            {/* Content Side */}
+                            <div className="md:w-1/2 p-8 md:p-10 flex flex-col justify-center text-left space-y-6 relative z-0">
+                                <div className="w-14 h-14 bg-gradient-to-tr from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+                                    <Sparkles className="w-7 h-7 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-pink-500 mb-2">
+                                        Pro Version
+                                    </h3>
+                                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20">
+                                        <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+                                        <span className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wide">Rolling out soon</span>
+                                    </div>
+                                </div>
+                                <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                                    You've hit the limit on the free plan. We are finalizing our Pro tier which will offer <b>more analysis and deeper insights</b>.
+                                </p>
+                                
+                                <div className="pt-2">
+                                    <button disabled className="w-full py-4 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 font-bold border-2 border-dashed border-zinc-200 dark:border-zinc-700 cursor-not-allowed flex flex-col items-center gap-1">
+                                        <span>Get Pro Access</span>
+                                        <span className="text-sm font-normal opacity-70">$10 / month</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

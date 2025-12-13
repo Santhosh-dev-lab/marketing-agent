@@ -13,7 +13,7 @@ export default function DashboardLayout({
     children: React.ReactNode;
 }) {
     const pathname = usePathname();
-    const [credits, setCredits] = useState({ used: 0, left: 12 });
+    const [credits, setCredits] = useState({ used: 0, left: 3 });
     const [taskCounts, setTaskCounts] = useState({ critical: 0, inProgress: 0 });
     const supabase = createClient();
 
@@ -30,49 +30,68 @@ export default function DashboardLayout({
                 const { data: { user } } = await supabase.auth.getUser();
                 if (!user) return;
 
-                // Fetch Brand & Strategy Data
-                const { data: brand } = await supabase.from('brands').select('id, audience_persona').eq('user_id', user.id).single();
+                // Credit Logic - Per User (No longer Brand based)
+                const { data: creditRow, error: creditError } = await supabase
+                    .from('user_credits')
+                    .select('credits_remaining')
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+
+                const creditsLeft = creditRow ? creditRow.credits_remaining : 3;
+                const used = Math.max(0, 3 - creditsLeft);
+                setCredits({ used, left: creditsLeft });
+
+                // Fetch Brand for Task Counts
+                const { data: brand } = await supabase.from('brands').select('id').eq('user_id', user.id).single();
                 
-                // REDIRECT LOGIC REMOVED: User requested non-blocking onboarding.
-                // We will now handle prompts via non-intrusive reminders in the UI.
+                if (brand) {
+                    // Task Counts Logic
+                    const { data: tasks } = await supabase
+                        .from('tasks')
+                        .select('status, priority')
+                        .eq('brand_id', brand.id)
+                        .neq('status', 'done');
+                    
+                    if (tasks) {
+                        const critical = tasks.filter(t => t.priority === 'critical').length;
+                        const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+                        setTaskCounts({ critical, inProgress });
+                    }
 
-                if (!brand) return;
+                    // --- REALTIME SUBSCRIPTIONS ---
+                    // 1. Listen for Task Changes
+                    const taskChannel = supabase
+                        .channel('layout_tasks')
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `brand_id=eq.${brand.id}` }, () => {
+                             checkAccess();
+                        })
+                        .subscribe();
+                    
+                    // 2. Listen for Credit Changes (User Scoped)
+                    const creditChannel = supabase
+                        .channel('layout_credits')
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'user_credits', filter: `user_id=eq.${user.id}` }, () => {
+                            checkAccess();
+                        })
+                        .subscribe();
 
-                // Credit Logic
-                const { data: creditRows } = await supabase.from('user_credits').select('credits_remaining').eq('brand_id', brand.id);
-                
-                const initiatedAgentsCount = creditRows?.length || 0;
-                // Assuming 4 agent types: strategy, content, visual, brand_twin
-                const totalAgents = 4;
-                const defaultCredits = 3;
-                const totalPossible = totalAgents * defaultCredits; // 12
-
-                const sumRemaining = creditRows?.reduce((a, b) => a + b.credits_remaining, 0) || 0;
-                const uninitiatedCredits = (totalAgents - initiatedAgentsCount) * defaultCredits;
-
-                const totalLeft = sumRemaining + uninitiatedCredits;
-                const totalUsed = totalPossible - totalLeft;
-
-                setCredits({ used: totalUsed, left: totalLeft });
-
-                // Task Counts Logic: Critical (Priority) & In Progress (Status)
-                const { data: tasks } = await supabase
-                    .from('tasks')
-                    .select('status, priority')
-                    .eq('brand_id', brand.id)
-                    .neq('status', 'done'); // Ignore completed tasks
-                
-                if (tasks) {
-                    const critical = tasks.filter(t => t.priority === 'critical').length;
-                    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
-                    setTaskCounts({ critical, inProgress });
+                    return () => {
+                        supabase.removeChannel(taskChannel);
+                        supabase.removeChannel(creditChannel);
+                    };
                 }
 
             } catch (e) {
                 console.error("Error in dashboard check:", e);
             }
         }
-        checkAccess();
+        
+        let cleanup: (() => void) | undefined;
+        checkAccess().then(unsub => { cleanup = unsub; });
+
+        return () => {
+             if (cleanup) cleanup();
+        };
     }, [pathname]);
 
     return (
@@ -147,9 +166,9 @@ export default function DashboardLayout({
                          <nav className="flex flex-col gap-1">
                             <Link
                                 href="/dashboard/tasks"
-                                className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition-colors ${isActive('/dashboard/tasks')
-                                    ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400'
-                                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-white/10'}`}
+                                className={`flex items-center justify-between px-3 py-2 rounded-lg font-bold transition-all ${isActive('/dashboard/tasks')
+                                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25'
+                                    : 'bg-zinc-100 dark:bg-zinc-800/50 text-zinc-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-zinc-800 hover:text-black dark:hover:text-white border border-transparent hover:border-zinc-200 dark:hover:border-zinc-700'}`}
                             >
                                 <div className="flex items-center gap-3">
                                     <CheckCircle2 className="w-5 h-5" />
@@ -175,20 +194,26 @@ export default function DashboardLayout({
 
                     <div className="mt-auto flex flex-col gap-4">
                         <div className="p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 border border-purple-200 dark:border-purple-500/20">
-                            <h4 className="text-sm font-bold text-purple-900 dark:text-purple-100 mb-2">Pro Plan</h4>
+                            <h4 className="text-sm font-bold text-purple-900 dark:text-purple-100 mb-2">Free Plan</h4>
                             <div className="flex justify-between items-center text-xs mb-3">
-                                <span className="text-purple-600 dark:text-purple-400">Used: <span className="font-semibold">{credits.used}</span></span>
-                                <span className="text-purple-800 dark:text-purple-200">Left: <span className="font-semibold">{credits.left}</span></span>
+                                <span className="text-purple-600 dark:text-purple-400">Analysis Credits</span>
+                                <span className="font-bold text-purple-800 dark:text-purple-200">{credits.left} / 3</span>
                             </div>
                             <div className="w-full h-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-full mb-3 overflow-hidden">
                                 <div
-                                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
-                                    style={{ width: `${(credits.used / 12) * 100}%` }}
+                                    className={`h-full rounded-full transition-all duration-500 ${credits.left <= 0 ? 'bg-zinc-300 dark:bg-zinc-700' : 'bg-gradient-to-r from-purple-500 to-pink-500'}`}
+                                    style={{ width: `${(credits.left / 3) * 100}%` }}
                                 />
                             </div>
-                            <button className="w-full py-1.5 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg hover:opacity-90 transition-opacity">
-                                Upgrade Now
-                            </button>
+                            {credits.left <= 0 ? (
+                                <button className="w-full py-1.5 text-xs font-bold text-white bg-zinc-400 cursor-not-allowed rounded-lg" disabled>
+                                    Limit Reached
+                                </button>
+                            ) : (
+                                <div className="text-[10px] text-center text-purple-600/70 dark:text-purple-300/50 font-medium">
+                                    Refills Weekly
+                                </div>
+                            )}
                         </div>
                         <Link
                             href="/"

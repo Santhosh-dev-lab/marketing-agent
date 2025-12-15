@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
+
+
 interface FAQItem {
     question: string;
     answer: string;

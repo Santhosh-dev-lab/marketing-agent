@@ -111,7 +111,7 @@ const NAV_DATA: MegaMenuData[] = [
                 items: [
                     { title: "Blog", href: "/blogs", icon: FileText },
                     { title: "Community", href: "/resources/community", icon: Users },
-                    { title: "Help Center", href: "/resources/help", icon: MessageSquare },
+                    { title: "Help Center", href: "/help-center", icon: MessageSquare },
                 ]
             }
         ],
@@ -144,8 +144,8 @@ export function MegaMenu() {
                     <Link
                         href={item.href || "#"}
                         className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-full transition-colors ${hoveredIndex === index
-                                ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
-                                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                            ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                            : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
                             }`}
                     >
                         {item.label}

@@ -2,7 +2,8 @@
 
 import { motion } from "framer-motion";
 import { CheckCircle2, Sparkles, Zap, BarChart3, Fingerprint } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Lottie from "lottie-react";
 import { cn } from "@/lib/utils";
 
 const features = [
@@ -34,6 +35,14 @@ const features = [
 
 export function FeaturesSection() {
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+    const [analyserData, setAnalyserData] = useState<any>(null);
+
+    useEffect(() => {
+        fetch("/web-analyser.json")
+            .then((res) => res.json())
+            .then((data) => setAnalyserData(data))
+            .catch((err) => console.error("Failed to load Lottie:", err));
+    }, []);
 
     return (
         <section id="features" className="relative z-10 w-full py-24 border-t border-zinc-200 dark:border-white/5">
@@ -66,7 +75,7 @@ export function FeaturesSection() {
                                 onHoverStart={() => setHoveredIndex(i)}
                                 onHoverEnd={() => setHoveredIndex(null)}
                                 className={cn(
-                                    "relative flex flex-col justify-end p-6 rounded-3xl overflow-hidden transition-all duration-500 ease-in-out cursor-pointer border border-zinc-200 dark:border-white/5 bg-white/50 dark:bg-white/5 hover:bg-white dark:hover:bg-zinc-900",
+                                    "relative flex flex-col justify-end p-6 rounded-3xl overflow-hidden transition-all duration-500 ease-in-out cursor-pointer border border-zinc-200 dark:border-white/5 bg-white dark:bg-[#0A0A0A] hover:bg-white dark:hover:bg-black min-h-[350px] md:min-h-0",
                                     "md:flex-[1] hover:md:flex-[2]", // Flex grow logic
                                     f.border
                                 )}
@@ -84,6 +93,17 @@ export function FeaturesSection() {
                                     )}
                                 />
 
+                                {/* Web Analyser Lottie (Brand Twin Identity Only) */}
+                                {f.title === "Brand Twin Identity" && analyserData && (
+                                    <div className="absolute top-0 left-0 w-full h-[65%] md:h-[90%] opacity-40 group-hover:opacity-60 transition-all duration-500 pointer-events-none translate-y-4">
+                                        <Lottie
+                                            animationData={analyserData}
+                                            loop
+                                            className="w-full h-full object-contain p-0 md:p-2"
+                                        />
+                                    </div>
+                                )}
+
                                 {/* Icon */}
                                 <div className="relative z-10 mb-auto">
                                     <div
@@ -98,12 +118,12 @@ export function FeaturesSection() {
                                 </div>
 
                                 {/* Text Content */}
-                                <div className="relative z-10 mt-8">
-                                    <h3 className="text-xl font-bold mb-3 text-zinc-900 dark:text-white leading-tight">
+                                <div className="relative z-10 mt-2 md:mt-8">
+                                    <h3 className="text-base md:text-xl font-bold mb-1 md:mb-3 text-zinc-900 dark:text-white leading-tight">
                                         {f.title}
                                     </h3>
                                     <motion.p
-                                        className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed max-w-xs"
+                                        className="text-[10px] md:text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed max-w-xs"
                                         animate={{
                                             opacity: 1 // Always visible for simplicity in this layout, or toggle based on expansion
                                         }}

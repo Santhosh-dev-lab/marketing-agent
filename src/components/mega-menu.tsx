@@ -124,7 +124,7 @@ const NAV_DATA: MegaMenuData[] = [
             }
         ]
     },
-    { label: "Company", type: "simple", href: "/about" },
+    { label: "Who We Are", type: "simple", href: "/about" },
     { label: "Pricing", type: "simple", href: "#pricing" },
 ];
 

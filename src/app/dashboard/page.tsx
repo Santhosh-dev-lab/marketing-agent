@@ -1,8 +1,47 @@
 "use client";
 
-import { BarChart3, Box, Calendar, Plus } from "lucide-react";
+import { BarChart3, Box, Calendar, Plus, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { BrandSettingsEditor } from "@/components/brand-settings-editor";
+import { DashboardAnalytics } from "@/components/dashboard-analytics";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function DashboardPage() {
+    const [showOnboarding, setShowOnboarding] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+    const [brandId, setBrandId] = useState<string | null>(null);
+    const supabase = createClient();
+
+    useEffect(() => {
+        async function checkBrandStrategy() {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+
+                const { data: brand } = await supabase.from('brands').select('id, audience_persona').eq('user_id', user.id).single();
+                
+                if (brand) {
+                    setBrandId(brand.id);
+                    // Automatic popup disabled per user request. 
+                    // We now rely on the BrandDetailsReminder component.
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        checkBrandStrategy();
+    }, []);
+
+    const handleSkip = () => {
+        setShowOnboarding(false);
+        if (brandId) {
+            localStorage.setItem(`skip_onboarding_${brandId}`, "true");
+        }
+    };
+
     return (
         <>
             <header className="flex justify-between items-center mb-8">
@@ -16,42 +55,48 @@ export default function DashboardPage() {
                 </button>
             </header>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {[
-                    { label: "Active Campaigns", value: "3", icon: Box, change: "+2 this week" },
-                    { label: "Scheduled Posts", value: "12", icon: Calendar, change: "Next post in 2h" },
-                    { label: "Engagement Rate", value: "4.8%", icon: BarChart3, change: "+12% vs last week" },
-                ].map((stat, i) => (
-                    <div key={i} className="p-6 rounded-2xl bg-white dark:bg-black/40 border border-zinc-200 dark:border-white/10 shadow-sm backdrop-blur-sm hover:border-purple-500/50 transition-colors group">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="p-2.5 rounded-lg bg-zinc-100 dark:bg-white/5 text-zinc-600 dark:text-zinc-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:bg-purple-50 dark:group-hover:bg-purple-500/10 transition-colors">
-                                <stat.icon className="w-5 h-5" />
-                            </div>
-                            <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400">
-                                {stat.change}
-                            </span>
-                        </div>
-                        <div className="text-3xl font-bold text-zinc-900 dark:text-white mb-1">{stat.value}</div>
-                        <div className="text-sm text-zinc-500 dark:text-zinc-400">{stat.label}</div>
-                    </div>
-                ))}
-            </div>
+            {/* Analytics Dashboard */}
+            <DashboardAnalytics />
 
-            {/* Checkered Placeholder for Chart */}
-            <div className="w-full h-96 rounded-2xl bg-white dark:bg-black/40 border border-zinc-200 dark:border-white/10 p-8 flex flex-col items-center justify-center text-center backdrop-blur-sm relative overflow-hidden group">
-                <div className="absolute inset-0 bg-grid-zinc-200/50 dark:bg-grid-white/5 [mask-image:linear-gradient(to_bottom,transparent,black,transparent)] pointer-events-none" />
-                <div className="relative z-10 max-w-md">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-zinc-100 dark:bg-white/5 flex items-center justify-center text-zinc-400 dark:text-zinc-500 group-hover:scale-110 transition-transform duration-500">
-                        <BarChart3 className="w-8 h-8" />
-                    </div>
-                    <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">Campaign Performance</h3>
-                    <p className="text-zinc-500 dark:text-zinc-400 mb-6">Connect your social accounts to view real-time engagement analytics and performance metrics.</p>
-                    <button className="px-5 py-2.5 rounded-lg border border-zinc-200 dark:border-white/10 hover:bg-zinc-50 dark:hover:bg-white/5 text-zinc-600 dark:text-zinc-300 text-sm font-medium transition-colors">
-                        Connect Accounts
-                    </button>
-                </div>
-            </div>
+            {/* Onboarding Modal */}
+            <AnimatePresence>
+                {showOnboarding && brandId && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-zinc-50 dark:bg-zinc-900 rounded-3xl shadow-2xl max-w-6xl w-full max-h-[95vh] overflow-hidden flex flex-col relative border border-zinc-200 dark:border-zinc-800"
+                        >
+                            {/* Modal Header */}
+                            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-zinc-950">
+                                <div>
+                                    <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Brand Strategy Setup</h2>
+                                    <p className="text-sm text-zinc-500">Configure your autonomous marketing agent.</p>
+                                </div>
+                                <button
+                                    onClick={handleSkip}
+                                    className="p-2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Scrollable Form Content */}
+                            <div className="flex-1 overflow-y-auto p-0 bg-zinc-50 dark:bg-black/20">
+                                <div className="p-6">
+                                    <BrandSettingsEditor brandId={brandId} />
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </>
     );
 }

@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { UserNav } from "@/components/user-nav";
 import { HeroSection } from "@/components/home/hero-section";
 import { FeaturesSection } from "@/components/home/features-section";
+import { SiteHeader } from "@/components/site-header";
+import { LoadingButton } from "@/components/ui/loading-button";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -13,72 +15,16 @@ export default async function Home() {
   try {
     const { data } = await supabase.auth.getUser();
     user = data.user;
-  } catch (error) {
-    // Suppress "Invalid Refresh Token" error
-    console.error("Home Page Auth Check Error:", error);
+  } catch (error: any) {
+    // Suppress "Invalid Refresh Token" error which is common when session expires
+    if (error?.code !== 'refresh_token_not_found') {
+      console.error("Home Page Auth Check Error:", error);
+    }
   }
 
   return (
     <div className="flex flex-col min-h-screen bg-white dark:bg-black text-zinc-900 dark:text-white selection:bg-purple-500 selection:text-white font-sans transition-colors duration-300 overflow-x-hidden">
-      <div className="fixed top-6 left-0 right-0 z-50 flex justify-center px-4">
-        <header className="w-full max-w-7xl h-16 flex items-center justify-between px-2 pl-4 pr-2 bg-white/70 dark:bg-zinc-900/70 backdrop-blur-xl border border-white/20 dark:border-white/10 rounded-full shadow-2xl shadow-black/5 mx-auto transition-all duration-300">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
-              MA
-            </div>
-            <span className="font-bold text-lg tracking-tight text-zinc-900 dark:text-white hidden sm:block">
-              MarketingAgent
-            </span>
-          </div>
-
-          <nav className="hidden md:flex gap-1 bg-zinc-100/50 dark:bg-white/5 p-1 rounded-full border border-black/5 dark:border-white/5">
-            {[
-              { label: "Features", href: "#features" },
-              { label: "How it works", href: "#how-it-works" },
-              { label: "Pricing", href: "#pricing" }
-            ].map((link) => (
-              <Link
-                key={link.label}
-                href={link.href}
-                className="px-4 py-1.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-white dark:hover:bg-white/10 rounded-full transition-all"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="flex gap-2 items-center">
-            {user ? (
-              <>
-                <Link
-                  href="/dashboard"
-                  className="px-5 py-2 text-sm font-semibold bg-zinc-900 dark:bg-white text-white dark:text-black rounded-full hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors shadow-lg"
-                >
-                  Dashboard
-                </Link>
-                <div className="pl-1">
-                  <UserNav user={user} />
-                </div>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="hidden sm:block px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/login"
-                  className="px-5 py-2 text-sm font-semibold bg-zinc-900 dark:bg-white text-white dark:text-black rounded-full hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
-                >
-                  Get Started
-                </Link>
-              </>
-            )}
-          </div>
-        </header>
-      </div>
+      <SiteHeader user={user} />
 
       <main className="flex-1 flex flex-col">
         {/* Background Elements */}
@@ -93,6 +39,8 @@ export default async function Home() {
         </div>
 
         <HeroSection user={user} />
+
+        {/* Onboarding Logic Removed: Replaced with Dashboard Reminder Card */}
 
         <FeaturesSection />
       </main>

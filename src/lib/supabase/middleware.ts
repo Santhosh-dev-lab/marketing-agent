@@ -32,7 +32,15 @@ export async function updateSession(request: NextRequest) {
         }
     )
 
-    await supabase.auth.getUser()
+    // Suppressing "Invalid Refresh Token" error (AuthApiError)
+    // This happens when the cookie is invalid or old, but we don't want to crash the middleware
+    try {
+        await supabase.auth.getUser()
+    } catch (error: any) {
+        if (error?.code !== 'refresh_token_not_found') {
+             console.error("Middleware Auth Error:", error);
+        }
+    }
 
     return response
 }

@@ -58,7 +58,7 @@ const NAV_DATA: MegaMenuData[] = [
             }
         ],
         featured: [
-             {
+            {
                 title: "AI Analysis",
                 description: "Deep dive into your website's performance automatically.",
                 href: "/dashboard/tasks", // Closest match to "Analysis" 
@@ -94,7 +94,7 @@ const NAV_DATA: MegaMenuData[] = [
                 href: "/case-studies/brandx",
                 bgColor: "bg-indigo-100 dark:bg-indigo-900/40"
             },
-             {
+            {
                 title: "The Solo Founder",
                 description: "Replacing a $10k/mo agency with AI.",
                 href: "/case-studies/founder",
@@ -109,9 +109,9 @@ const NAV_DATA: MegaMenuData[] = [
             {
                 title: "Learn",
                 items: [
-                     { title: "Blog", href: "/resources/blog", icon: FileText },
-                     { title: "Community", href: "/resources/community", icon: Users },
-                     { title: "Help Center", href: "/resources/help", icon: MessageSquare },
+                    { title: "Blog", href: "/blogs", icon: FileText },
+                    { title: "Community", href: "/resources/community", icon: Users },
+                    { title: "Help Center", href: "/resources/help", icon: MessageSquare },
                 ]
             }
         ],
@@ -134,20 +134,19 @@ export function MegaMenu() {
     return (
         <nav className="flex gap-2">
             {NAV_DATA.map((item, index) => (
-                <div 
-                    key={index} 
+                <div
+                    key={index}
                     className="relative group"
                     onMouseEnter={() => setHoveredIndex(index)}
                     onMouseLeave={() => setHoveredIndex(null)}
                 >
                     {/* Trigger */}
-                    <Link 
-                        href={item.href || "#"} 
-                        className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-full transition-colors ${
-                            hoveredIndex === index 
-                            ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
-                            : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
-                        }`}
+                    <Link
+                        href={item.href || "#"}
+                        className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-full transition-colors ${hoveredIndex === index
+                                ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                                : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
+                            }`}
                     >
                         {item.label}
                         {item.type === 'mega' && (
@@ -167,7 +166,7 @@ export function MegaMenu() {
                                 style={{ transform: "translateX(-20%)" }} // Center slightly
                             >
                                 <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl overflow-hidden p-6 flex gap-8 min-w-[600px] max-w-[900px]">
-                                    
+
                                     {/* Columns Section */}
                                     {item.columns?.map((col, colIdx) => (
                                         <div key={colIdx} className="w-64 space-y-4">
@@ -176,8 +175,8 @@ export function MegaMenu() {
                                             </h3>
                                             <div className="space-y-2">
                                                 {col.items.map((subItem, subIdx) => (
-                                                    <Link 
-                                                        key={subIdx} 
+                                                    <Link
+                                                        key={subIdx}
                                                         href={subItem.href}
                                                         className="flex items-start gap-4 p-2 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group/item"
                                                     >
@@ -213,8 +212,8 @@ export function MegaMenu() {
                                             </h3>
                                             <div className="grid gap-3">
                                                 {item.featured.map((feat, featIdx) => (
-                                                    <Link 
-                                                        key={featIdx} 
+                                                    <Link
+                                                        key={featIdx}
                                                         href={feat.href}
                                                         className={`block p-4 rounded-2xl transition-transform hover:-translate-y-1 ${feat.bgColor}`}
                                                     >
@@ -225,7 +224,7 @@ export function MegaMenu() {
                                                             {feat.description}
                                                         </p>
                                                         {feat.image && (
-                                                           <div className="mt-4 h-24 bg-zinc-900/5 rounded-lg w-full" />
+                                                            <div className="mt-4 h-24 bg-zinc-900/5 rounded-lg w-full" />
                                                         )}
                                                     </Link>
                                                 ))}

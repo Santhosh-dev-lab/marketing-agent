@@ -19,6 +19,7 @@ export const metadata: Metadata = {
 };
 
 import { Analytics } from "@/components/analytics";
+import { ChatWidget } from "@/components/chat-widget";
 
 export default function RootLayout({
   children,
@@ -39,6 +40,7 @@ export default function RootLayout({
         >
           {children}
           <Analytics />
+          <ChatWidget />
         </ThemeProvider>
       </body>
     </html>

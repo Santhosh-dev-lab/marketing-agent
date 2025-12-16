@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Bot, User as UserIcon, Loader2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import Lottie from "lottie-react";
 
 interface Message {
     role: "user" | "assistant";
@@ -25,7 +26,17 @@ export function ChatWidget() {
         }
     }, [messages]);
 
+    const [chatbotData, setChatbotData] = useState<any>(null);
+
+    useEffect(() => {
+        fetch("/chatbot-animation.json")
+            .then((res) => res.json())
+            .then((data) => setChatbotData(data))
+            .catch((err) => console.error("Failed to load chatbot animation:", err));
+    }, []);
+
     const handleSubmit = async (e: React.FormEvent) => {
+        // ... (rest of handleSubmit remains unchanged, but I need to include it or just replace the component body parts. I will use a larger replacement to be safe or be very specific with hooks)
         e.preventDefault();
         if (!input.trim() || isLoading) return;
 
@@ -130,7 +141,7 @@ export function ChatWidget() {
     };
 
     return (
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end pointer-events-none">
+        <div className="fixed bottom-6 right-4 md:right-20 z-50 flex flex-col items-end pointer-events-none">
 
             <AnimatePresence>
                 {isOpen && (
@@ -219,12 +230,46 @@ export function ChatWidget() {
 
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`pointer-events-auto p-4 rounded-full shadow-lg transition-all transform hover:scale-105 ${isOpen
-                    ? "bg-zinc-800 text-white rotate-90"
-                    : "bg-gradient-to-r from-purple-600 to-pink-600 text-white"
+                className={`pointer-events-auto rounded-full transition-all transform hover:scale-105 flex items-center justify-center overflow-hidden ${isOpen
+                    ? "bg-zinc-800 text-white rotate-90 w-14 h-14 shadow-lg"
+                    : chatbotData && Object.keys(chatbotData).length > 0 ? "w-32 h-32 bg-transparent" : "bg-gradient-to-r from-purple-600 to-pink-600 text-white w-14 h-14 shadow-lg" // Larger if animation
                     }`}
             >
-                {isOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
+                {isOpen ? (
+                    <X className="w-6 h-6" />
+                ) : chatbotData && Object.keys(chatbotData).length > 0 ? (
+                    <div className="w-full h-full relative overflow-hidden">
+                        <style dangerouslySetInnerHTML={{
+                            __html: `
+                                .lottie-hide-text text,
+                                .lottie-hide-text tspan {
+                                    display: none !important;
+                                    visibility: hidden !important;
+                                    opacity: 0 !important;
+                                }
+                            `
+                        }} />
+                        <Lottie
+                            animationData={chatbotData}
+                            loop
+                            className="w-full h-full lottie-hide-text"
+                            style={{
+                                pointerEvents: 'none',
+                                mixBlendMode: 'screen'
+                            }}
+                        />
+                        {/* Overlay to cover watermark text at bottom */}
+                        <div
+                            className="absolute bottom-0 left-0 right-0 h-8 bg-transparent"
+                            style={{
+                                background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)',
+                                pointerEvents: 'none'
+                            }}
+                        />
+                    </div>
+                ) : (
+                    <MessageCircle className="w-6 h-6" />
+                )}
             </button>
         </div>
     );

@@ -22,3 +22,11 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Hide Lottie watermark text */
+.lottie-hide-text svg text,
+.lottie-hide-text svg tspan {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}

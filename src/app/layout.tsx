@@ -20,6 +20,7 @@ export const metadata: Metadata = {
 
 import { Analytics } from "@/components/analytics";
 import { ChatWidget } from "@/components/chat-widget";
+import { ErrorSuppressor } from "@/components/error-suppressor";
 
 export default function RootLayout({
   children,
@@ -38,6 +39,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <ErrorSuppressor />
           {children}
           <Analytics />
           <ChatWidget />

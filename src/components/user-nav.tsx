@@ -11,7 +11,7 @@ import {
     Bell,
     BookOpen,
     HelpCircle,
-    ChevronUp,
+    ChevronDown,
     Mail,
     Lock,
     Newspaper
@@ -26,7 +26,7 @@ interface UserNavProps {
 
 export function UserNav({ user }: UserNavProps) {
     const [isOpen, setIsOpen] = useState(false);
-    
+
     const router = useRouter();
     const supabase = createClient();
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -56,7 +56,8 @@ export function UserNav({ user }: UserNavProps) {
         <>
             <div className="relative" ref={dropdownRef}>
                 <button
-                    onClick={() => setIsOpen(!isOpen)}
+                    onMouseEnter={() => setIsOpen(true)}
+                    onMouseLeave={() => setIsOpen(false)}
                     className="flex items-center gap-2 p-1 pr-2 rounded-full hover:bg-zinc-100 dark:hover:bg-neutral-800 transition-all border border-transparent hover:border-zinc-200 dark:hover:border-neutral-700"
                 >
                     <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold text-white shadow-md overflow-hidden ring-2 ring-white dark:ring-black">
@@ -66,7 +67,7 @@ export function UserNav({ user }: UserNavProps) {
                             displayName.substring(0, 2).toUpperCase()
                         )}
                     </div>
-                    <ChevronUp className={`w-4 h-4 text-zinc-500 dark:text-neutral-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 text-zinc-500 dark:text-neutral-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 <AnimatePresence>
@@ -76,6 +77,8 @@ export function UserNav({ user }: UserNavProps) {
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 10, scale: 0.95 }}
                             transition={{ duration: 0.1 }}
+                            onMouseEnter={() => setIsOpen(true)}
+                            onMouseLeave={() => setIsOpen(false)}
                             className="absolute right-0 mt-2 w-72 bg-white dark:bg-[#0A0A0A] border border-zinc-200 dark:border-white/10 rounded-2xl shadow-xl overflow-hidden z-50 divide-y divide-zinc-100 dark:divide-white/5"
                         >
                             {/* User Info Header */}

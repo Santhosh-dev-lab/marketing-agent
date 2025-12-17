@@ -13,7 +13,7 @@ interface BrandSettingsData {
     website?: string;
     industry?: string;
     location?: string;
-    
+
     // Audience
     audience_persona?: { demographics: string; pain_points: string[] };
     primary_goal?: string;
@@ -55,12 +55,13 @@ const TONE_OPTIONS = ["Professional", "Witty", "Friendly", "Luxury", "Urgent/Hyp
 const LANGUAGE_OPTIONS = ["English", "Spanish", "French", "Hindi", "German"];
 
 
-export function BrandSettingsEditor({ brandId }: { brandId: string }) {
-    const [isLoading, setIsLoading] = useState(true);
+export function BrandSettingsEditor({ brandId, onSaveSuccess }: { brandId?: string | null, onSaveSuccess?: () => void }) {
+    const [isLoading, setIsLoading] = useState(!!brandId);
+    const [localBrandId, setLocalBrandId] = useState<string | null>(brandId || null);
     const [activeTab, setActiveTab] = useState("basics");
     const [isSaving, setIsSaving] = useState(false);
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
-    
+
     const supabase = createClient();
     const { register, handleSubmit, reset, setValue, watch } = useForm<any>();
 
@@ -70,11 +71,23 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
     const language = watch('language');
 
 
+    // Sync prop to local state
+    useEffect(() => {
+        if (brandId) {
+            setLocalBrandId(brandId);
+            setIsLoading(true); // Trigger fetch
+        } else {
+            setIsLoading(false);
+        }
+    }, [brandId]);
+
     // Fetch Data
     useEffect(() => {
+        if (!localBrandId) return;
+
         async function fetchData() {
             try {
-                const { data: brand, error } = await supabase.from('brands').select('*').eq('id', brandId).single();
+                const { data: brand, error } = await supabase.from('brands').select('*').eq('id', localBrandId).single();
                 if (error) throw error;
 
                 // Map flat DB fields to form structure if needed, or just pass directly
@@ -84,7 +97,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                     website: brand.website,
                     industry: brand.industry || "Retail",
                     location: brand.location,
-                    
+
                     audience_demographics: brand.audience_persona?.demographics,
                     audience_pain_points: (brand.audience_persona?.pain_points || []).join(', '),
                     primary_goal: brand.primary_goal || "Brand Awareness",
@@ -109,7 +122,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
 
                     forbidden_words: (brand.forbidden_words || []).join(', '),
                     competitors: (brand.competitors || []).map((c: any) => c.name).join(', '),
-                    
+
                     brand_color: brand.brand_color || "#000000",
                 });
             } catch (e) {
@@ -119,7 +132,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
             }
         }
         fetchData();
-    }, [brandId, reset]);
+    }, [localBrandId, reset, supabase]);
 
     const onSubmit = async (formData: any) => {
         setIsSaving(true);
@@ -149,7 +162,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                     twitter: formData.twitter,
                     linkedin: formData.linkedin
                 },
-                
+
                 api_config: {
                     serpapi: { api_key: formData.serpapi_key },
                     instagram: { access_token: formData.ig_token },
@@ -164,14 +177,47 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                 brand_color: formData.brand_color
             };
 
-            const { error } = await supabase.from('brands').update(payload).eq('id', brandId);
-            if (error) throw error;
-            
+            if (localBrandId) {
+                // Update
+                const { error } = await supabase.from('brands').update(payload).eq('id', localBrandId);
+                if (error) throw error;
+            } else {
+                // Create OR Recover existing
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) throw new Error("User not found");
+
+                // Check if brand already exists for this user (safeguard)
+                const { data: existingBrand } = await supabase
+                    .from('brands')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+
+                if (existingBrand) {
+                    // Recovered: Update instead of Insert
+                    // console.log("Found existing brand, updating...", existingBrand.id);
+                    const { error } = await supabase.from('brands').update(payload).eq('id', existingBrand.id);
+                    if (error) throw error;
+                    setLocalBrandId(existingBrand.id);
+                } else {
+                    // Truly new
+                    const { data: newBrand, error } = await supabase.from('brands').insert({
+                        ...payload,
+                        user_id: user.id
+                    }).select().single();
+
+                    if (error) throw error;
+                    if (newBrand) setLocalBrandId(newBrand.id);
+                }
+            }
+
             // Show success toast (basic alert for now)
             alert("Settings saved successfully!");
-        } catch (e) {
-            console.error(e);
-            alert("Failed to save.");
+            onSaveSuccess?.();
+
+        } catch (e: any) {
+            console.error("Save Error:", e);
+            alert(`Failed to save: ${e.message || "Unknown error"}`);
         } finally {
             setIsSaving(false);
         }
@@ -197,11 +243,10 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm ${
-                            activeTab === tab.id 
-                            ? "bg-zinc-900 dark:bg-white text-white dark:text-black shadow-lg shadow-zinc-500/10" 
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium text-sm ${activeTab === tab.id
+                            ? "bg-zinc-900 dark:bg-white text-white dark:text-black shadow-lg shadow-zinc-500/10"
                             : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-white"
-                        }`}
+                            }`}
                     >
                         <tab.icon className="w-4 h-4" />
                         {tab.label}
@@ -212,7 +257,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
             {/* Main Form Area */}
             <div className="flex-1 bg-white dark:bg-zinc-900/50 rounded-3xl border border-zinc-200 dark:border-zinc-800 p-6 md:p-8">
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 max-w-2xl">
-                    
+
                     {/* Basics Tab */}
                     {activeTab === "basics" && (
                         <div className="space-y-6">
@@ -229,11 +274,11 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                     <label className="text-xs font-semibold uppercase text-zinc-500 tracking-wider">Industry</label>
                                     <div className="space-y-2">
                                         <div className="relative">
-                                            <select 
+                                            <select
                                                 value={INDUSTRY_OPTIONS.includes(industry) ? industry : "Other"}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
-                                                    if (val === "Other") setValue("industry", ""); 
+                                                    if (val === "Other") setValue("industry", "");
                                                     else setValue("industry", val);
                                                 }}
                                                 className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all appearance-none cursor-pointer"
@@ -246,12 +291,12 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                             </div>
                                         </div>
                                         {(!INDUSTRY_OPTIONS.includes(industry) && industry !== undefined) && (
-                                             <input 
+                                            <input
                                                 value={industry}
                                                 onChange={(e) => setValue("industry", e.target.value)}
                                                 placeholder="Enter custom industry..."
                                                 className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-400"
-                                             />
+                                            />
                                         )}
                                     </div>
                                 </div>
@@ -259,18 +304,18 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                     <label className="text-xs font-semibold uppercase text-zinc-500 tracking-wider">Website URL</label>
                                     <div className="flex gap-2">
                                         <input {...register('website')} placeholder="https://" className="flex-1 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all placeholder:text-zinc-400" />
-                                        <button 
+                                        <button
                                             type="button"
                                             onClick={async () => {
                                                 const url = watch('website');
                                                 if (!url) return alert("Please enter a website URL first.");
-                                                
+
                                                 const btn = document.getElementById('analyze-btn');
-                                                if(btn) { btn.innerHTML = 'Analyzing...'; (btn as HTMLButtonElement).disabled = true; }
+                                                if (btn) { btn.innerHTML = 'Analyzing...'; (btn as HTMLButtonElement).disabled = true; }
 
                                                 try {
                                                     let { data: { session } } = await supabase.auth.getSession();
-                                                    
+
                                                     // Ensure valid session or refresh
                                                     if (!session?.access_token) {
                                                         const { data, error } = await supabase.auth.refreshSession();
@@ -282,13 +327,13 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                                     }
 
                                                     const token = session.access_token;
-                                                    console.log("[Client] Sending Token:", token.substring(0, 10) + "...");
-                                                    
+                                                    // console.log("[Client] Sending Token:", token.substring(0, 10) + "...");
+
                                                     // Sanity check
-                                                    if (!token || token === "undefined") {
-                                                        alert("Critical: Token is invalid/undefined before sending!");
-                                                        return;
-                                                    }
+                                                    // if (!token || token === "undefined") {
+                                                    //     alert("Critical: Token is invalid/undefined before sending!");
+                                                    //     return;
+                                                    // }
 
                                                     const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/analyze-website`, {
                                                         method: 'POST',
@@ -296,6 +341,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                                             'Content-Type': 'application/json',
                                                             'Authorization': `Bearer ${token}`
                                                         },
+                                                        // Send brandId if we have it, otherwise null
                                                         body: JSON.stringify({ brand_id: brandId, website_url: url })
                                                     });
 
@@ -307,11 +353,24 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
 
                                                     const json = await res.json();
                                                     if (json.error) throw new Error(json.error);
-                                                    alert(`Success! Generated ${json.tasks?.length} new tasks based on your website.`);
+
+                                                    // Feedback
+                                                    if (brandId) {
+                                                        // If we have a brand, we saved tasks to DB, so we can say that.
+                                                        alert(`Success! Generated ${json.tasks?.length || 0} tasks and updated strategy.`);
+
+                                                        // Refresh fields if we had a brand
+                                                        // (Previously we re-fetched, but the edge function doesn't update brand columns yet, so no op)
+                                                    } else {
+                                                        // If no brand, we just previewed.
+                                                        alert(`Analysis Complete! found ${json.tasks?.length || 0} opportunities.`);
+                                                    }
+
                                                 } catch (e) {
+                                                    console.error(e);
                                                     alert(`Analysis failed: ${e instanceof Error ? e.message : String(e)}`);
                                                 } finally {
-                                                    if(btn) { btn.innerHTML = '✨ Analyze'; (btn as HTMLButtonElement).disabled = false; }
+                                                    if (btn) { btn.innerHTML = '✨ Analyze'; (btn as HTMLButtonElement).disabled = false; }
                                                 }
                                             }}
                                             id="analyze-btn"
@@ -346,7 +405,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                     <label className="text-xs font-semibold uppercase text-zinc-500 tracking-wider">Primary Goal</label>
                                     <div className="space-y-2">
                                         <div className="relative">
-                                            <select 
+                                            <select
                                                 value={GOAL_OPTIONS.includes(primaryGoal) ? primaryGoal : "Other"}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
@@ -363,7 +422,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                             </div>
                                         </div>
                                         {(!GOAL_OPTIONS.includes(primaryGoal) && primaryGoal !== undefined) && (
-                                            <input 
+                                            <input
                                                 value={primaryGoal}
                                                 onChange={(e) => setValue("primary_goal", e.target.value)}
                                                 placeholder="Enter custom goal..."
@@ -392,7 +451,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                     <label className="text-xs font-semibold uppercase text-zinc-500 tracking-wider">Tone of Voice</label>
                                     <div className="space-y-2">
                                         <div className="relative">
-                                            <select 
+                                            <select
                                                 value={TONE_OPTIONS.includes(toneVoice) ? toneVoice : "Other"}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
@@ -409,7 +468,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                             </div>
                                         </div>
                                         {(!TONE_OPTIONS.includes(toneVoice) && toneVoice !== undefined) && (
-                                            <input 
+                                            <input
                                                 value={toneVoice}
                                                 onChange={(e) => setValue("tone_voice", e.target.value)}
                                                 placeholder="Enter custom tone..."
@@ -435,7 +494,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                     <label className="text-xs font-semibold uppercase text-zinc-500 tracking-wider">Language</label>
                                     <div className="space-y-2">
                                         <div className="relative">
-                                            <select 
+                                            <select
                                                 value={LANGUAGE_OPTIONS.includes(language) ? language : "Other"}
                                                 onChange={(e) => {
                                                     const val = e.target.value;
@@ -451,8 +510,8 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                                             </div>
                                         </div>
-                                         {(!LANGUAGE_OPTIONS.includes(language) && language !== undefined) && (
-                                            <input 
+                                        {(!LANGUAGE_OPTIONS.includes(language) && language !== undefined) && (
+                                            <input
                                                 value={language}
                                                 onChange={(e) => setValue("language", e.target.value)}
                                                 placeholder="Enter custom language..."
@@ -470,7 +529,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                 <label className="text-xs font-semibold uppercase text-zinc-500 tracking-wider">Key Adjectives (3-5 words)</label>
                                 <input {...register('key_adjectives')} placeholder="e.g. Sustainable, Premium, Cozy" className="w-full px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-white focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 outline-none transition-all placeholder:text-zinc-400" />
                             </div>
-                             <div className="space-y-1">
+                            <div className="space-y-1">
                                 <label className="text-xs font-semibold uppercase text-zinc-500 tracking-wider">Core Values (Comma separated)</label>
                                 <textarea {...register('brand_values')} rows={2} className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 text-zinc-900 dark:text-white focus:ring-2 focus:ring-yellow-500/20 focus:border-yellow-500 outline-none transition-all placeholder:text-zinc-400 resize-none" />
                             </div>
@@ -569,12 +628,12 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                 Integrations
                             </h2>
                             <p className="text-sm text-zinc-500">Connect your accounts to view real data in the Analytics Dashboard.</p>
-                            
+
                             {/* Google Trends (System) */}
                             <div className="p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 flex justify-between items-center">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center text-blue-600">
-                                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg> 
+                                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" /></svg>
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-zinc-900 dark:text-white">Google Trends</h3>
@@ -629,8 +688,8 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
 
                     {/* Footer Actions */}
                     <div className="pt-6 border-t border-zinc-100 dark:border-zinc-800 flex justify-end">
-                        <button 
-                            type="submit" 
+                        <button
+                            type="submit"
                             disabled={isSaving}
                             className="flex items-center gap-2 px-6 py-2.5 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-lg font-bold hover:shadow-lg disabled:opacity-50 transition-all"
                         >
@@ -643,7 +702,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
             </div>
             <AnimatePresence>
                 {isUpgradeModalOpen && (
-                    <motion.div 
+                    <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -655,7 +714,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                             exit={{ scale: 0.95, opacity: 0 }}
                             className="w-full max-w-3xl bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden relative flex flex-col md:flex-row"
                         >
-                            <button 
+                            <button
                                 onClick={() => setIsUpgradeModalOpen(false)}
                                 className="absolute right-4 top-4 z-10 bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors backdrop-blur-md"
                             >
@@ -685,7 +744,7 @@ export function BrandSettingsEditor({ brandId }: { brandId: string }) {
                                 <p className="text-zinc-600 dark:text-zinc-400 leading-relaxed">
                                     You've hit the limit on the free plan. We are finalizing our Pro tier which will offer <b>more analysis and deeper insights</b>.
                                 </p>
-                                
+
                                 <div className="pt-2">
                                     <button disabled className="w-full py-4 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 font-bold border-2 border-dashed border-zinc-200 dark:border-zinc-700 cursor-not-allowed flex flex-col items-center gap-1">
                                         <span>Get Pro Access</span>

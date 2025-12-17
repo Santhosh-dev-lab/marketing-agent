@@ -22,7 +22,8 @@ export default function SettingsPage() {
                     return;
                 }
 
-                const { data: brand } = await supabase.from('brands').select('id').eq('user_id', user.id).single();
+                // Use maybeSingle to avoid 406 error if no brand exists
+                const { data: brand } = await supabase.from('brands').select('id').eq('user_id', user.id).maybeSingle();
                 if (brand) {
                     setBrandId(brand.id);
                 }
@@ -41,9 +42,7 @@ export default function SettingsPage() {
         return <div className="flex items-center justify-center min-h-[50vh]"><Loader2 className="w-8 h-8 animate-spin text-purple-600" /></div>;
     }
 
-    if (!brandId) {
-         return <div className="text-center p-10">Brand not found.</div>;
-    }
+    // Allow rendering Editor even if brandId is null (Create Mode)
 
     return (
         <div className="max-w-4xl mx-auto space-y-8 pb-20">

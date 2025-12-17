@@ -22,7 +22,7 @@ export default function DashboardLayout({
         return pathname === path || pathname.startsWith(`${path}/`);
     };
 
-    const router = useRouter(); 
+    const router = useRouter();
 
     useEffect(() => {
         async function checkAccess() {
@@ -43,7 +43,7 @@ export default function DashboardLayout({
 
                 // Fetch Brand for Task Counts
                 const { data: brand } = await supabase.from('brands').select('id').eq('user_id', user.id).single();
-                
+
                 if (brand) {
                     // Task Counts Logic
                     const { data: tasks } = await supabase
@@ -51,7 +51,7 @@ export default function DashboardLayout({
                         .select('status, priority')
                         .eq('brand_id', brand.id)
                         .neq('status', 'done');
-                    
+
                     if (tasks) {
                         const critical = tasks.filter(t => t.priority === 'critical').length;
                         const inProgress = tasks.filter(t => t.status === 'in_progress').length;
@@ -63,10 +63,10 @@ export default function DashboardLayout({
                     const taskChannel = supabase
                         .channel('layout_tasks')
                         .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `brand_id=eq.${brand.id}` }, () => {
-                             checkAccess();
+                            checkAccess();
                         })
                         .subscribe();
-                    
+
                     // 2. Listen for Credit Changes (User Scoped)
                     const creditChannel = supabase
                         .channel('layout_credits')
@@ -85,12 +85,12 @@ export default function DashboardLayout({
                 console.error("Error in dashboard check:", e);
             }
         }
-        
+
         let cleanup: (() => void) | undefined;
         checkAccess().then(unsub => { cleanup = unsub; });
 
         return () => {
-             if (cleanup) cleanup();
+            if (cleanup) cleanup();
         };
     }, [pathname]);
 
@@ -123,13 +123,13 @@ export default function DashboardLayout({
                             Overview
                         </Link>
                         <Link
-                            href="/dashboard/campaigns"
-                            className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${isActive('/dashboard/campaigns')
+                            href="/dashboard/content"
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${isActive('/dashboard/content')
                                 ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400'
                                 : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-white/10'}`}
                         >
                             <Box className="w-5 h-5" />
-                            Campaigns
+                            Content
                         </Link>
                         <Link
                             href="/dashboard/analytics"
@@ -139,15 +139,6 @@ export default function DashboardLayout({
                         >
                             <BarChart3 className="w-5 h-5" />
                             Analytics
-                        </Link>
-                        <Link
-                            href="/dashboard/brand"
-                            className={`flex items-center gap-3 px-3 py-2 rounded-lg font-medium transition-colors ${isActive('/dashboard/brand')
-                                ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400'
-                                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-white/10'}`}
-                        >
-                            <span className="w-5 h-5 flex items-center justify-center font-bold text-xs border border-current rounded">B</span>
-                            Brand Twin
                         </Link>
                         <Link
                             href="/dashboard/settings"
@@ -162,8 +153,8 @@ export default function DashboardLayout({
 
                     {/* Tasks Section with Counts */}
                     <div className="px-3 mt-4 mb-2">
-                         <div className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider px-2 mb-2">Work</div>
-                         <nav className="flex flex-col gap-1">
+                        <div className="text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider px-2 mb-2">Work</div>
+                        <nav className="flex flex-col gap-1">
                             <Link
                                 href="/dashboard/tasks"
                                 className={`flex items-center justify-between px-3 py-2 rounded-lg font-bold transition-all ${isActive('/dashboard/tasks')
@@ -189,7 +180,7 @@ export default function DashboardLayout({
                                     </div>
                                 )}
                             </Link>
-                         </nav>
+                        </nav>
                     </div>
 
                     <div className="mt-auto flex flex-col gap-4">

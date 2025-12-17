@@ -20,51 +20,51 @@ serve(async (req) => {
         const supabase = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { 
+            {
                 auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-                global: { headers: { Authorization: authHeader ?? '' } } 
+                global: { headers: { Authorization: authHeader ?? '' } }
             }
         );
 
         const { brand_id, website_url } = await req.json();
         brand_id_scope = brand_id;
 
-        if (!brand_id || !website_url) throw new Error("Missing brand_id or website_url");
+        if (!website_url) throw new Error("Missing website_url");
 
         // Verify User Auth
         let token = authHeader?.replace('Bearer ', '') ?? '';
-        
+
         // If empty, try to get from context or fail early
         if (!token) {
-             console.warn("[Edge] Token extraction failed. Header:", authHeader);
+            console.warn("[Edge] Token extraction failed. Header:", authHeader);
         }
 
         const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-        
+
         if (authError) console.error("[Edge] getUser Error:", authError);
         if (!user) console.warn("[Edge] No user found in session.");
-        
+
         if (authError || !user) throw new Error(`Unauthorized: ${authError?.message || "Auth session missing!"}`);
 
         // --- CREDIT SYSTEM: ATOMIC DEDUCT (PER USER) ---
         const { data: creditResult, error: rpcError } = await supabase
-            .rpc('deduct_credits', { 
+            .rpc('deduct_credits', {
                 p_user_id: user.id,
-                p_cost: 1 
+                p_cost: 1
             });
 
         if (rpcError) throw new Error("Credit system error: " + rpcError.message);
 
         if (!creditResult.success) {
             console.warn(`User ${user.id} insufficient credits. Remaining: ${creditResult.remaining}`);
-            return new Response(JSON.stringify({ 
-                error: "Insufficient credits. Please upgrade to Pro." 
-            }), { 
+            return new Response(JSON.stringify({
+                error: "Insufficient credits. Please upgrade to Pro."
+            }), {
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
-                status: 402 
+                status: 402
             });
         }
-        
+
         console.log(`Credit deducted for User ${user.id}. Remaining: ${creditResult.remaining}`);
         // -------------------------------------
 
@@ -85,7 +85,7 @@ serve(async (req) => {
             if (JINA_KEY) headers['Authorization'] = `Bearer ${JINA_KEY}`;
 
             const crawlerRes = await fetch(`https://r.jina.ai/${website_url}`, { headers });
-            
+
             if (crawlerRes.ok) {
                 const markdown = await crawlerRes.text();
                 const titleMatch = markdown.match(/^# (.*$)/m);
@@ -96,31 +96,31 @@ serve(async (req) => {
                 throw new Error("Jina failed");
             }
         } catch (jinaError) {
-             // Priority 2: Cheerio Fallback
-             console.log("Falling back to Cheerio Basic Scraper...");
-             try {
+            // Priority 2: Cheerio Fallback
+            console.log("Falling back to Cheerio Basic Scraper...");
+            try {
                 const res = await fetch(website_url, {
                     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; MarketingAgentBot/1.0)' }
                 });
-                
+
                 if (!res.ok) throw new Error(`Basic fetch failed: ${res.status}`);
-                
+
                 const html = await res.text();
                 const $ = cheerio.load(html);
-                
+
                 // Remove clutter
                 $('script, style, nav, footer, iframe, svg').remove();
-                
+
                 scrapedData.title = $('title').text().trim() || "Website Analysis";
                 const h1 = $('h1').map((_, el) => $(el).text().trim()).get().join('; ');
                 const body = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 8000);
-                
+
                 // Convert to pseudo-markdown for the AI
                 scrapedData.markdown = `# ${scrapedData.title}\n\n## H1: ${h1}\n\n${body}`;
-             } catch (cheerioError) {
-                 console.error("All crawlers failed:", cheerioError);
-                 throw new Error("Could not crawl website. Please check URL complexity or add JINA_API_KEY.");
-             }
+            } catch (cheerioError) {
+                console.error("All crawlers failed:", cheerioError);
+                throw new Error("Could not crawl website. Please check URL complexity or add JINA_API_KEY.");
+            }
         }
 
         // 2. Analyze with Gemini (Advanced Growth Engineering Prompt)
@@ -166,17 +166,17 @@ serve(async (req) => {
 
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
         const aiRes = await fetch(geminiUrl, {
-            method: 'POST', 
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         });
 
         if (!aiRes.ok) throw new Error("AI Analysis Service failed: " + aiRes.statusText);
-        
+
         const aiJson = await aiRes.json();
         let text = aiJson.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        
+
         let tasks = [];
         try {
             tasks = JSON.parse(text);
@@ -186,8 +186,10 @@ serve(async (req) => {
         }
 
         // 3. Insert Tasks
+        // We now support saving tasks even without a brand_id, linking them to user_id instead.
         const taskInserts = tasks.map((t: any) => ({
-            brand_id,
+            brand_id: brand_id || null, // Explicit null if undefined
+            user_id: user.id,          // Link to user
             title: t.title,
             description: t.description,
             priority: ['high', 'medium', 'low', 'critical'].includes(t.priority?.toLowerCase()) ? t.priority.toLowerCase() : 'medium',
@@ -196,20 +198,21 @@ serve(async (req) => {
         }));
 
         const { error: insertError } = await supabase.from('tasks').insert(taskInserts);
-        if (insertError) throw insertError;
+        if (insertError) {
+            console.error("Task Insert Error:", insertError);
+            throw new Error("Failed to save tasks: " + insertError.message);
+        }
 
-        // 4. INGEST KNOWLEDGE (Brand Twin Merge)
+        // 4. INGEST KNOWLEDGE (Brand Twin Merge) (ONLY IF BRAND ID EXISTS)
         // We also want to "remember" this content for future AI generation (email, posts, etc.)
-        console.log("Generating Embeddings for Brand Twin...");
-        
-        // chunking markdown roughly by paragraphs or headers
         const rawChunks = scrapedData.markdown.split(/\n\n+/).filter(c => c.length > 50);
         const chunks = rawChunks.slice(0, 20); // Limit to top 20 meaningful blocks to save tokens/time
 
-        if (chunks.length > 0) {
+        if (brand_id && chunks.length > 0) {
+            console.log("Generating Embeddings for Brand Twin...");
             try {
                 const embeddings = await generateEmbeddingsGemini(chunks, GEMINI_API_KEY);
-                
+
                 const memories = chunks.map((content, i) => ({
                     brand_id,
                     content: content.substring(0, 1000), // Limit char count per chunk
@@ -219,8 +222,8 @@ serve(async (req) => {
                 })).filter((_, i) => embeddings[i]); // Ensure embedding exists
 
                 if (memories.length > 0) {
-                     await supabase.from('memories').insert(memories);
-                     console.log(`Ingested ${memories.length} memory chunks.`);
+                    await supabase.from('memories').insert(memories);
+                    console.log(`Ingested ${memories.length} memory chunks.`);
                 }
             } catch (embedError) {
                 console.error("Embedding generation failed:", embedError);
@@ -228,12 +231,12 @@ serve(async (req) => {
             }
         }
 
-        return new Response(JSON.stringify({ 
-            success: true, 
+        return new Response(JSON.stringify({
+            success: true,
             tasks: taskInserts,
-            ingested_memories: chunks.length 
-        }), { 
-            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+            ingested_memories: brand_id ? chunks.length : 0
+        }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
 
     } catch (error) {
@@ -241,7 +244,7 @@ serve(async (req) => {
 
         // --- CREDIT REFUND LOGIC ---
         if (error.message && !error.message.includes("Insufficient credits") && brand_id_scope) {
-             try {
+            try {
                 // Re-instantiate supabase client just for refund if needed, or use existing if we could hoist it too.
                 // We'll init a fresh one to be safe/simple here or rely on the fact we can't easily access 'supabase' from try block.
                 // Actually, let's just return the error for now as the refund logic is getting complex with scoping.
@@ -255,7 +258,7 @@ serve(async (req) => {
         }
         // ---------------------------
 
-        return new Response(JSON.stringify({ error: error.message }), { 
+        return new Response(JSON.stringify({ error: error.message }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: error.message?.includes("Insufficient credits") ? 402 : 500
         });
@@ -266,7 +269,7 @@ serve(async (req) => {
 async function generateEmbeddingsGemini(texts: string[], geminiKey: string): Promise<number[][]> {
     if (!geminiKey) return []; // Should throw, but safe fallback
     const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key=${geminiKey}`;
-    
+
     // Batching is handled by caller (slice 20), but Gemini accepts up to 100 usually.
     const requests = texts.map(text => ({
         model: "models/text-embedding-004",

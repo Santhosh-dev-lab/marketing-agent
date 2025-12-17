@@ -1,65 +1,144 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
-
-// Retry Helper
-async function fetchWithRetry(url: string, options: RequestInit, retries = 3, backoff = 1000) {
-    for (let i = 0; i < retries; i++) {
-        try {
-            const res = await fetch(url, options);
-            if (res.ok) return res;
-            if (res.status === 503 || res.status === 429) {
-                console.warn(`Attempt ${i + 1} failed: ${res.status}. Retrying...`);
-                await new Promise(r => setTimeout(r, backoff * (i + 1)));
-                continue;
-            }
-            return res;
-        } catch (e) {
-            console.warn(`Attempt ${i + 1} error: ${e}. Retrying...`);
-            await new Promise(r => setTimeout(r, backoff * (i + 1)));
-        }
-    }
-    throw new Error(`Failed after ${retries} attempts.`);
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-application-name',
 }
 
 serve(async (req) => {
-    if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+    if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: corsHeaders })
+    }
 
     try {
-        const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization')! } } })
-        const { brand_id, topic, platform } = await req.json();
+        // 1. Check API Key
+        const apiKey = Deno.env.get('GROQ_API_KEY');
+        if (!apiKey) {
+            throw new Error("Missing GROQ_API_KEY secret");
+        }
 
-        // Credit Check
-        const { data: credits } = await supabase.from('user_credits').select('*').eq('brand_id', brand_id).eq('agent_type', 'content').single();
-        let currentCredits = credits?.credits_remaining ?? 3;
-        if (!credits) await supabase.from('user_credits').insert({ brand_id, agent_type: 'content', credits_remaining: 3 });
+        // 2. Initialize Supabase
+        const supabaseUrl = Deno.env.get('SUPABASE_URL');
+        const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+        const authHeader = req.headers.get('Authorization');
 
-        if (currentCredits <= 0) return new Response(JSON.stringify({ error: "Insufficient credits" }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 402 });
+        if (!supabaseUrl || !supabaseKey || !authHeader) {
+            throw new Error("Missing Supabase configuration or Authorization header");
+        }
 
-        const { data: brand } = await supabase.from('brands').select('*').eq('id', brand_id).single();
+        const supabase = createClient(supabaseUrl, supabaseKey, {
+            global: { headers: { Authorization: authHeader } },
+        })
 
-        const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-        const prompt = `Write a ${platform} post for ${brand.name}. Topic: ${topic}. Voice: ${brand.tone_voice?.description}. Return Strictly JSON: { "content": "...", "hashtags": [] }`;
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+        // 3. Authenticate User
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError || !user) {
+            console.error("Auth Error:", authError);
+            throw new Error("Unauthorized: Invalid token");
+        }
 
-        const res = await fetchWithRetry(geminiUrl, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        // 4. Parse Body
+        let body;
+        try {
+            body = await req.json();
+        } catch (e) {
+            throw new Error("Invalid JSON body");
+        }
+        const { topic, type, platform, brand_id } = body;
+
+        // 5. Fetch Brand
+        let brandQuery = supabase.from('brands').select('*')
+        if (brand_id) {
+            brandQuery = brandQuery.eq('id', brand_id)
+        } else {
+            brandQuery = brandQuery.eq('user_id', user.id).limit(1)
+        }
+
+        const { data: brands, error: brandError } = await brandQuery
+
+        if (brandError) {
+            throw new Error(`Database Error: ${brandError.message}`);
+        }
+        if (!brands || brands.length === 0) {
+            throw new Error('Brand profile not found. Please create a brand first.');
+        }
+        const brand = brands[0]
+
+        // 6. Context Preparation
+        const toneVoice = brand.tone_voice
+        const persona = brand.audience_persona
+        const values = brand.brand_values
+        const industry = brand.industry || "General"
+
+        let voiceDesc = ""
+        if (typeof toneVoice === 'object' && toneVoice !== null) {
+            voiceDesc = `
+        - Archetype: ${toneVoice.archetype || 'N/A'}
+        - Tone: ${toneVoice.tone || 'Professional'}
+        - Style: ${toneVoice.communication_style || 'Direct'}
+        - Adjectives: ${Array.isArray(toneVoice.adjectives) ? toneVoice.adjectives.join(', ') : 'N/A'}
+        `
+        } else {
+            voiceDesc = String(toneVoice || "Professional and engaging")
+        }
+
+        const systemPrompt = `
+    You are an expert Social Media Manager for a brand in the ${industry} industry.
+    
+    BRAND IDENTITY:
+    - Name: ${brand.name}
+    - Voice & Tone: ${voiceDesc}
+    - Target Audience: ${JSON.stringify(persona || "General Public")}
+    - Core Values: ${JSON.stringify(values || "Quality, Integrity")}
+    
+    YOUR TASK:
+    Generate ${type} content for ${platform} about "${topic}".
+    
+    REQUIREMENTS:
+    - Strict adherence to the brand voice described above.
+    - Use appropriate hashtags for ${platform}.
+    - Format with emojis if the tone allows.
+    - Output ONLY the content (caption/post), no conversational filler.
+    `
+
+        // 7. Generate with Groq (Llama 3.1 70B)
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: `Generate content for ${platform} about: ${topic}` }
+                ],
+                model: 'llama-3.1-70b-versatile',
+                temperature: 0.7,
+                max_tokens: 1024,
+            })
         });
 
-        if (!res.ok) throw new Error("Generation Failed: " + await res.text());
-        const json = await res.json();
-        let text = json.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const result = JSON.parse(text);
+        if (!response.ok) {
+            const errData = await response.json();
+            console.error("Groq API Error:", errData);
+            throw new Error(`Groq API Error: ${errData.error?.message || response.statusText}`);
+        }
 
-        // Deduct
-        await supabase.from('user_credits').update({ credits_remaining: currentCredits - 1 }).eq('brand_id', brand_id).eq('agent_type', 'content');
+        const data = await response.json();
+        const content = data.choices[0]?.message?.content || "No content generated.";
 
-        return new Response(JSON.stringify(result), { headers: { ...corsHeaders, "Content-Type": "application/json" } })
+        return new Response(JSON.stringify({ content: content }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+        })
 
-    } catch (e) {
-        return new Response(JSON.stringify({ error: e.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 })
+    } catch (error) {
+        console.error("Function Error:", error.message);
+        return new Response(JSON.stringify({ error: error.message }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 400,
+        })
     }
 })

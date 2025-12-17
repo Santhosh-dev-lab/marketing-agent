@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, Search, Filter, CheckCircle2, Clock, AlertCircle, MoreHorizontal, UserPlus, Mail, Globe } from "lucide-react";
+import { Plus, Search, Filter, CheckCircle2, Clock, AlertCircle, MoreHorizontal, UserPlus, Mail, Globe, Download } from "lucide-react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 interface Task {
     id: string;
@@ -19,13 +21,13 @@ interface Task {
     created_at: string;
 }
 
-export function TasksView({ brandId }: { brandId: string }) {
+export function TasksView({ brandId, userId }: { brandId: string | null, userId: string | null }) {
     const [tasks, setTasks] = useState<Task[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoading, setIsLoading] = useState(false); // Default false if no brand/user, set true if valid
     const [filter, setFilter] = useState("all");
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isClearAllModalOpen, setIsClearAllModalOpen] = useState(false);
-    
+
     // Create Task Form State
     const [newTaskTitle, setNewTaskTitle] = useState("");
     const [newTaskDesc, setNewTaskDesc] = useState("");
@@ -34,16 +36,31 @@ export function TasksView({ brandId }: { brandId: string }) {
     const supabase = createClient();
 
     useEffect(() => {
+        if ((!brandId || brandId === 'null') && (!userId)) {
+            setTasks([]);
+            setIsLoading(false);
+            return;
+        }
+
+        setIsLoading(true);
         fetchTasks();
 
         // Realtime Subscription
+        // Use brand_id filter if we have it, otherwise user_id (if schema supports strict user filter, but typically RLS handles it)
+        // Note: For now, if no brandId, we might not get realtime updates unless we filter by user_id if column exists.
+        // Assuming migration added user_id.
+        let filterStr = `brand_id=eq.${brandId}`;
+        if (!brandId && userId) {
+            filterStr = `user_id=eq.${userId}`;
+        }
+
         const channel = supabase
             .channel('realtime_tasks')
-            .on('postgres_changes', { 
-                event: '*', 
-                schema: 'public', 
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
                 table: 'tasks',
-                filter: `brand_id=eq.${brandId}`
+                filter: filterStr
             }, (payload) => {
                 const newTask = payload.new as Task;
                 const oldTask = payload.old as Task;
@@ -61,16 +78,24 @@ export function TasksView({ brandId }: { brandId: string }) {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [brandId]);
+    }, [brandId, userId]);
 
     async function fetchTasks() {
+        if ((!brandId || brandId === 'null') && (!userId)) return;
+
         try {
-            const { data, error } = await supabase
-                .from('tasks')
-                .select('*')
-                .eq('brand_id', brandId)
-                .order('created_at', { ascending: false });
-            
+            let query = supabase.from('tasks').select('*');
+
+            if (brandId && brandId !== 'null') {
+                query = query.eq('brand_id', brandId);
+            } else if (userId) {
+                // Fallback to user_id if brand is missing
+                // This requires the 'user_id' column to exist (migration 20251217)
+                query = query.eq('user_id', userId);
+            }
+
+            const { data, error } = await query.order('created_at', { ascending: false });
+
             if (error) throw error;
             setTasks(data || []);
         } catch (e) {
@@ -79,6 +104,70 @@ export function TasksView({ brandId }: { brandId: string }) {
             setIsLoading(false);
         }
     }
+
+    // PDF Export Function
+    const handleExportPDF = () => {
+        const doc = new jsPDF();
+
+        // Add Title and Brand Info
+        doc.setFontSize(22);
+        doc.setTextColor(24, 24, 27); // Zinc 900
+        doc.text("Marketing Action Plan", 14, 22);
+
+        doc.setFontSize(10);
+        doc.setTextColor(113, 113, 122); // Zinc 500
+        doc.text(`Generated on ${format(new Date(), 'MMMM d, yyyy')} | status: ${filter.toUpperCase()}`, 14, 30);
+
+        // Prepare Data
+        const tableData = filteredTasks.map(t => [
+            t.title,
+            t.description || "No description provided.",
+            t.status.replace('_', ' ').toUpperCase(),
+            t.priority.toUpperCase(),
+            format(new Date(t.created_at), 'MMM d')
+        ]);
+
+        // Generate Table
+        autoTable(doc, {
+            head: [['Action Item', 'Details / AI Recommendation', 'Status', 'Priority', 'Date']],
+            body: tableData,
+            startY: 40,
+            theme: 'grid',
+            styles: {
+                fontSize: 10,
+                cellPadding: 4,
+                lineColor: [228, 228, 231], // Zinc 200
+                lineWidth: 0.1,
+            },
+            headStyles: {
+                fillColor: [24, 24, 27], // Zinc 900
+                textColor: [255, 255, 255],
+                fontStyle: 'bold',
+                fontSize: 9
+            },
+            columnStyles: {
+                0: { cellWidth: 40, fontStyle: 'bold' }, // Title
+                1: { cellWidth: 'auto' }, // Description (Flexible)
+                2: { cellWidth: 25 }, // Status
+                3: { cellWidth: 20 }, // Priority
+                4: { cellWidth: 20 }  // Date
+            },
+            alternateRowStyles: {
+                fillColor: [250, 250, 250] // Zinc 50
+            }
+        });
+
+        // Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(161, 161, 170);
+            doc.text(`Page ${i} of ${pageCount} | Generated by AI Marketing Agent`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' });
+        }
+
+        doc.save(`marketing-plan-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    };
 
     async function handleCreateTask(e: React.FormEvent) {
         e.preventDefault();
@@ -104,8 +193,6 @@ export function TasksView({ brandId }: { brandId: string }) {
 
     const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
 
-    // ... existing imports ...
-
     async function updateStatus(taskId: string, newStatus: string) {
         if (newStatus === 'done') {
             setTaskToDelete(taskId);
@@ -114,7 +201,7 @@ export function TasksView({ brandId }: { brandId: string }) {
 
         // Optimistic update
         setTasks(tasks.map(t => t.id === taskId ? { ...t, status: newStatus as any } : t));
-        
+
         await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId);
     }
 
@@ -122,7 +209,7 @@ export function TasksView({ brandId }: { brandId: string }) {
         if (!taskToDelete) return;
 
         const { error } = await supabase.from('tasks').delete().eq('id', taskToDelete);
-            
+
         if (error) {
             alert("Failed to delete task");
         } else {
@@ -155,7 +242,7 @@ export function TasksView({ brandId }: { brandId: string }) {
         // For now, we just save the field
         setTasks(tasks.map(t => t.id === taskId ? { ...t, assignee_email: email } : t));
         await supabase.from('tasks').update({ assignee_email: email }).eq('id', taskId);
-        
+
         alert(`Task assigned to ${email}. (Email notification would be sent here)`);
     }
 
@@ -184,15 +271,25 @@ export function TasksView({ brandId }: { brandId: string }) {
                     <p className="text-zinc-500">Manage your marketing tasks and AI recommendations.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    {/* Export Button */}
+                    <button
+                        onClick={handleExportPDF}
+                        disabled={tasks.length === 0}
+                        className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-xl font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50"
+                    >
+                        <Download className="w-4 h-4" />
+                        Export PDF
+                    </button>
+
                     {tasks.length > 0 && (
-                        <button 
+                        <button
                             onClick={() => setIsClearAllModalOpen(true)}
                             className="px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl font-medium transition-colors text-sm"
                         >
                             Clear All
                         </button>
                     )}
-                    <button 
+                    <button
                         onClick={() => setIsCreateModalOpen(true)}
                         className="flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-xl font-medium hover:opacity-90 transition-opacity"
                     >
@@ -208,11 +305,10 @@ export function TasksView({ brandId }: { brandId: string }) {
                     <button
                         key={f}
                         onClick={() => setFilter(f)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                            filter === f 
-                            ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border border-zinc-200 dark:border-zinc-700 shadow-sm" 
+                        className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filter === f
+                            ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white border border-zinc-200 dark:border-zinc-700 shadow-sm"
                             : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
-                        }`}
+                            }`}
                     >
                         {f === 'all' ? 'All Tasks' : f.replace('_', ' ').charAt(0).toUpperCase() + f.replace('_', ' ').slice(1)}
                     </button>
@@ -232,17 +328,16 @@ export function TasksView({ brandId }: { brandId: string }) {
                 ) : (
                     <AnimatePresence>
                         {filteredTasks.map((task) => (
-                            <motion.div 
+                            <motion.div
                                 key={task.id}
                                 layout
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0 }}
-                                className={`group p-5 rounded-2xl border transition-all ${
-                                    task.status === 'done' 
-                                    ? "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-100 dark:border-zinc-800 opacity-60" 
+                                className={`group p-5 rounded-2xl border transition-all ${task.status === 'done'
+                                    ? "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-100 dark:border-zinc-800 opacity-60"
                                     : "bg-white dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm"
-                                }`}
+                                    }`}
                             >
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1 space-y-2">
@@ -267,10 +362,10 @@ export function TasksView({ brandId }: { brandId: string }) {
                                                 </span>
                                             )}
                                             {task.source_url && (
-                                                <a 
-                                                    href={task.source_url} 
-                                                    target="_blank" 
-                                                    rel="noopener noreferrer" 
+                                                <a
+                                                    href={task.source_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
                                                     className="flex items-center gap-1 text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full hover:underline"
                                                     onClick={(e) => e.stopPropagation()}
                                                 >
@@ -284,7 +379,7 @@ export function TasksView({ brandId }: { brandId: string }) {
                                     {/* Actions */}
                                     <div className="flex items-center gap-2">
                                         {task.status !== 'done' && (
-                                            <button 
+                                            <button
                                                 onClick={() => handleAssignEmail(task.id)}
                                                 className="p-2 text-zinc-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
                                                 title="Assign to Email"
@@ -292,8 +387,8 @@ export function TasksView({ brandId }: { brandId: string }) {
                                                 <UserPlus className="w-5 h-5" />
                                             </button>
                                         )}
-                                        
-                                        <select 
+
+                                        <select
                                             value={task.status}
                                             onChange={(e) => updateStatus(task.id, e.target.value)}
                                             className="bg-transparent text-sm font-medium text-zinc-500 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 focus:border-zinc-400 outline-none"
@@ -312,7 +407,7 @@ export function TasksView({ brandId }: { brandId: string }) {
 
             {/* Clear All Confirmation Modal */}
             {isClearAllModalOpen && (
-                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                     <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border border-red-100 dark:border-red-900/30">
                         <div className="flex flex-col items-center text-center gap-4">
                             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center text-red-600 dark:text-red-500">
@@ -322,18 +417,18 @@ export function TasksView({ brandId }: { brandId: string }) {
                                 <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">Clear All Tasks?</h2>
                                 <p className="text-zinc-500 text-sm">
                                     You are about to delete <strong>{tasks.length} tasks</strong>.
-                                    <br/><br/>
+                                    <br /><br />
                                     This action is <strong className="text-red-500">irreversible</strong>.
                                 </p>
                             </div>
                             <div className="flex gap-3 w-full mt-2">
-                                <button 
+                                <button
                                     onClick={() => setIsClearAllModalOpen(false)}
                                     className="flex-1 px-4 py-2 text-zinc-600 dark:text-zinc-300 font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
                                 >
                                     Cancel
                                 </button>
-                                <button 
+                                <button
                                     onClick={handleClearAll}
                                     className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20"
                                 >
@@ -342,7 +437,7 @@ export function TasksView({ brandId }: { brandId: string }) {
                             </div>
                         </div>
                     </div>
-                 </div>
+                </div>
             )}
 
             {/* Create Modal */}
@@ -360,26 +455,26 @@ export function TasksView({ brandId }: { brandId: string }) {
                             {/* ... existing form inputs ... */}
                             <div>
                                 <label className="block text-sm font-medium mb-1">Title</label>
-                                <input 
-                                    required 
-                                    value={newTaskTitle} 
+                                <input
+                                    required
+                                    value={newTaskTitle}
                                     onChange={e => setNewTaskTitle(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 outline-none focus:ring-2 focus:ring-purple-500" 
+                                    className="w-full px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 outline-none focus:ring-2 focus:ring-purple-500"
                                     placeholder="e.g. Update Homepage Banner"
                                 />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">Description</label>
-                                <textarea 
-                                    value={newTaskDesc} 
+                                <textarea
+                                    value={newTaskDesc}
                                     onChange={e => setNewTaskDesc(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 outline-none focus:ring-2 focus:ring-purple-500 resize-none h-24" 
+                                    className="w-full px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 outline-none focus:ring-2 focus:ring-purple-500 resize-none h-24"
                                     placeholder="Details..."
                                 />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">Priority</label>
-                                <select 
+                                <select
                                     value={newTaskPriority}
                                     onChange={e => setNewTaskPriority(e.target.value)}
                                     className="w-full px-4 py-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 outline-none focus:ring-2 focus:ring-purple-500"
@@ -401,7 +496,7 @@ export function TasksView({ brandId }: { brandId: string }) {
 
             {/* Delete Confirmation Modal */}
             {taskToDelete && (
-                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
                     <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200 border border-red-100 dark:border-red-900/30">
                         <div className="flex flex-col items-center text-center gap-4">
                             <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center text-red-600 dark:text-red-500">
@@ -411,18 +506,18 @@ export function TasksView({ brandId }: { brandId: string }) {
                                 <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">Delete this Task?</h2>
                                 <p className="text-zinc-500 text-sm">
                                     You are marking <strong>"{tasks.find(t => t.id === taskToDelete)?.title}"</strong> as finished.
-                                    <br/><br/>
+                                    <br /><br />
                                     This will <strong>permanently delete</strong> it from your task list. This action cannot be undone.
                                 </p>
                             </div>
                             <div className="flex gap-3 w-full mt-2">
-                                <button 
+                                <button
                                     onClick={() => setTaskToDelete(null)}
                                     className="flex-1 px-4 py-2 text-zinc-600 dark:text-zinc-300 font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
                                 >
                                     Cancel
                                 </button>
-                                <button 
+                                <button
                                     onClick={confirmDelete}
                                     className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20"
                                 >
@@ -431,7 +526,7 @@ export function TasksView({ brandId }: { brandId: string }) {
                             </div>
                         </div>
                     </div>
-                 </div>
+                </div>
             )}
         </div>
     );

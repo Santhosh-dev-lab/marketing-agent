@@ -58,10 +58,10 @@ export function HeroSection({ user }: { user: any }) {
 
                     <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
                         <Link
-                            href={user ? "/wizard" : "/login"}
+                            href={user ? "/dashboard/onboarding" : "/login"}
                             className="inline-flex items-center justify-center gap-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-8 py-3 rounded-full font-medium hover:opacity-90 transition-opacity"
                         >
-                            Start Generating
+                            Analyze Website
                             <ArrowRight className="w-4 h-4" />
                         </Link>
                         <Link

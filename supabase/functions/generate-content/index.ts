@@ -12,16 +12,15 @@ serve(async (req: Request) => {
     }
 
     try {
-        // ... (rest of the logic stays same)
         // 1. Check API Key
-        const apiKey = Deno.env.get('GROQ_API_KEY');
+        const apiKey = (Deno as any).env.get('GROQ_API_KEY');
         if (!apiKey) {
             throw new Error("Missing GROQ_API_KEY secret");
         }
 
         // 2. Initialize Supabase
-        const supabaseUrl = Deno.env.get('SUPABASE_URL');
-        const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+        const supabaseUrl = (Deno as any).env.get('SUPABASE_URL');
+        const supabaseKey = (Deno as any).env.get('SUPABASE_ANON_KEY');
         const authHeader = req.headers.get('Authorization');
 
         if (!supabaseUrl || !supabaseKey || !authHeader) {

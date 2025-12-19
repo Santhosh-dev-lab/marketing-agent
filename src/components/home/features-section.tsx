@@ -37,6 +37,7 @@ export function FeaturesSection() {
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
     const [analyserData, setAnalyserData] = useState<any>(null);
     const [autonomousData, setAutonomousData] = useState<any>(null);
+    const [analyticsData, setAnalyticsData] = useState<any>(null);
 
     useEffect(() => {
         fetch("/web-analyser.json")
@@ -48,6 +49,11 @@ export function FeaturesSection() {
             .then((res) => res.json())
             .then((data) => setAutonomousData(data))
             .catch((err) => console.error("Failed to load Autonomous Lottie:", err));
+
+        fetch("/analytics.json")
+            .then((res) => res.json())
+            .then((data) => setAnalyticsData(data))
+            .catch((err) => console.error("Failed to load Analytics Lottie:", err));
     }, []);
 
     return (
@@ -73,7 +79,6 @@ export function FeaturesSection() {
                 <div className="flex flex-col md:flex-row gap-6 h-auto md:h-96">
                     {features.map((f, i) => {
                         const isHovered = hoveredIndex === i;
-                        const isAnyHovered = hoveredIndex !== null;
 
                         return (
                             <motion.div
@@ -121,6 +126,17 @@ export function FeaturesSection() {
                                     </div>
                                 )}
 
+                                {/* Predictive Analytics Lottie */}
+                                {f.title === "Predictive Analytics" && analyticsData && (
+                                    <div className="absolute top-0 left-0 w-full h-[65%] md:h-[90%] opacity-40 group-hover:opacity-60 transition-all duration-500 pointer-events-none translate-y-2">
+                                        <Lottie
+                                            animationData={analyticsData}
+                                            loop
+                                            className="w-full h-full object-contain p-0 md:p-4 scale-125"
+                                        />
+                                    </div>
+                                )}
+
                                 {/* Icon */}
                                 <div className="relative z-10 mb-auto">
                                     <div
@@ -142,7 +158,7 @@ export function FeaturesSection() {
                                     <motion.p
                                         className="text-[10px] md:text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed max-w-xs"
                                         animate={{
-                                            opacity: 1 // Always visible for simplicity in this layout, or toggle based on expansion
+                                            opacity: 1
                                         }}
                                     >
                                         {f.desc}

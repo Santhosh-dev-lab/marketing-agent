@@ -6,12 +6,13 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-application-name',
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
     }
 
     try {
+        // ... (rest of the logic stays same)
         // 1. Check API Key
         const apiKey = Deno.env.get('GROQ_API_KEY');
         if (!apiKey) {
@@ -134,9 +135,10 @@ serve(async (req) => {
             status: 200,
         })
 
-    } catch (error) {
-        console.error("Function Error:", error.message);
-        return new Response(JSON.stringify({ error: error.message }), {
+    } catch (error: any) {
+        const msg = error instanceof Error ? error.message : "Internal Server Error";
+        console.error("Function Error:", msg);
+        return new Response(JSON.stringify({ error: msg }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 400,
         })

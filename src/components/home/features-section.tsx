@@ -36,12 +36,18 @@ const features = [
 export function FeaturesSection() {
     const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
     const [analyserData, setAnalyserData] = useState<any>(null);
+    const [autonomousData, setAutonomousData] = useState<any>(null);
 
     useEffect(() => {
         fetch("/web-analyser.json")
             .then((res) => res.json())
             .then((data) => setAnalyserData(data))
             .catch((err) => console.error("Failed to load Lottie:", err));
+
+        fetch("/autonomous.json")
+            .then((res) => res.json())
+            .then((data) => setAutonomousData(data))
+            .catch((err) => console.error("Failed to load Autonomous Lottie:", err));
     }, []);
 
     return (
@@ -100,6 +106,17 @@ export function FeaturesSection() {
                                             animationData={analyserData}
                                             loop
                                             className="w-full h-full object-contain p-0 md:p-2"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Autonomous Campaigns Lottie */}
+                                {f.title === "Autonomous Campaigns" && autonomousData && (
+                                    <div className="absolute top-0 left-0 w-full h-[65%] md:h-[90%] opacity-40 group-hover:opacity-60 transition-all duration-500 pointer-events-none translate-y-2">
+                                        <Lottie
+                                            animationData={autonomousData}
+                                            loop
+                                            className="w-full h-full object-contain p-0 md:p-4 scale-110"
                                         />
                                     </div>
                                 )}

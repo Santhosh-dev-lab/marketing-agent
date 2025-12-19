@@ -327,80 +327,171 @@ export function TasksView({ brandId, userId }: { brandId: string | null, userId:
                     </div>
                 ) : (
                     <AnimatePresence>
-                        {filteredTasks.map((task) => (
-                            <motion.div
-                                key={task.id}
-                                layout
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0 }}
-                                className={`group p-5 rounded-2xl border transition-all ${task.status === 'done'
-                                    ? "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-100 dark:border-zinc-800 opacity-60"
-                                    : "bg-white dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-sm"
-                                    }`}
-                            >
-                                <div className="flex items-start justify-between gap-4">
-                                    <div className="flex-1 space-y-2">
-                                        <div className="flex items-center gap-3">
-                                            <h3 className={`font-semibold text-lg ${task.status === 'done' ? 'line-through text-zinc-500' : 'text-zinc-900 dark:text-white'}`}>
-                                                {task.title}
-                                            </h3>
-                                            <PriorityBadge p={task.priority} />
+                        {filteredTasks.map((task) => {
+                            // Helper to parse content
+                            const parseContent = (desc: string) => {
+                                const sections = {
+                                    insight: "",
+                                    action: "",
+                                    impact: ""
+                                };
+
+                                // Simple regex-like extraction (case insensitive)
+                                const insightMatch = desc.match(/Insight:\s*([\s\S]*?)(?=(Action:|Impact:|$))/i);
+                                const actionMatch = desc.match(/Action:\s*([\s\S]*?)(?=(Impact:|$))/i);
+                                const impactMatch = desc.match(/Impact:\s*([\s\S]*?)(?=$)/i);
+
+                                if (insightMatch) sections.insight = insightMatch[1].trim();
+                                if (actionMatch) sections.action = actionMatch[1].trim();
+                                if (impactMatch) sections.impact = impactMatch[1].trim();
+
+                                if (!insightMatch && !actionMatch && !impactMatch) return null;
+                                return sections;
+                            };
+
+                            const parsed = parseContent(task.description);
+
+                            return (
+                                <motion.div
+                                    key={task.id}
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.98 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    className={`group relative overflow-hidden rounded-3xl border transition-all duration-300 shadow-sm ${task.status === 'done'
+                                        ? "bg-zinc-50 dark:bg-zinc-900/30 border-zinc-100 dark:border-zinc-800 opacity-70 grayscale-[0.5]"
+                                        : "bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 hover:border-purple-300 dark:hover:border-purple-800 hover:shadow-xl hover:shadow-purple-500/5 hover:-translate-y-1"
+                                        }`}
+                                >
+                                    {/* Priority Stripe */}
+                                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${task.priority === 'critical' ? 'bg-gradient-to-b from-red-500 to-pink-600' :
+                                        task.priority === 'high' ? 'bg-gradient-to-b from-orange-500 to-amber-500' :
+                                            task.priority === 'medium' ? 'bg-gradient-to-b from-blue-500 to-cyan-500' :
+                                                'bg-zinc-300 dark:bg-zinc-700'
+                                        }`} />
+
+                                    <div className="p-6 pl-8">
+                                        <div className="flex flex-col md:flex-row gap-6 mb-6">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    <PriorityBadge p={task.priority} />
+                                                    {task.source_url && (
+                                                        <a
+                                                            href={task.source_url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-blue-600 bg-zinc-100 dark:bg-zinc-900 px-3 py-1 rounded-full transition-colors truncate max-w-[200px]"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <Globe className="w-3 h-3" />
+                                                            {new URL(task.source_url).hostname}
+                                                        </a>
+                                                    )}
+                                                </div>
+                                                <h3 className={`text-xl font-bold leading-snug tracking-tight ${task.status === 'done' ? 'line-through text-zinc-400' : 'text-zinc-900 dark:text-zinc-100'
+                                                    }`}>
+                                                    {task.title}
+                                                </h3>
+                                            </div>
+
+                                            {/* Action Controls */}
+                                            <div className="flex items-center gap-3 self-start shrink-0">
+                                                {task.status !== 'done' && (
+                                                    <button
+                                                        onClick={() => handleAssignEmail(task.id)}
+                                                        className="h-10 w-10 flex items-center justify-center rounded-xl text-zinc-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 border border-transparent hover:border-purple-200 dark:hover:border-purple-800 transition-all shadow-sm hover:shadow"
+                                                        title="Assign to teammate"
+                                                    >
+                                                        <UserPlus className="w-5 h-5" />
+                                                    </button>
+                                                )}
+
+                                                <div className="relative">
+                                                    <select
+                                                        value={task.status}
+                                                        onChange={(e) => updateStatus(task.id, e.target.value)}
+                                                        className={`h-10 pl-4 pr-10 rounded-xl text-sm font-bold cursor-pointer outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all appearance-none border shadow-sm ${task.status === 'todo' ? 'bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-800' :
+                                                            task.status === 'in_progress' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/50' :
+                                                                'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-900/50'
+                                                            }`}
+                                                    >
+                                                        <option value="todo">To Do</option>
+                                                        <option value="in_progress">In Progress</option>
+                                                        <option value="done">Done</option>
+                                                    </select>
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60">
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <p className="text-sm text-zinc-500 max-w-2xl">
-                                            {task.description}
-                                        </p>
-                                        <div className="flex items-center gap-4 text-xs text-zinc-400 mt-2">
-                                            <span className="flex items-center gap-1">
-                                                <Clock className="w-3 h-3" />
-                                                {format(new Date(task.created_at), 'MMM d, yyyy')}
-                                            </span>
+
+                                        {/* Structured Content */}
+                                        <div className="space-y-4 mb-6">
+                                            {parsed ? (
+                                                <div className="grid gap-4">
+                                                    {parsed.insight && (
+                                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/20 p-5 rounded-2xl border border-blue-100 dark:border-blue-900/30">
+                                                            <h4 className="flex items-center gap-2 text-xs font-extrabold text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-3">
+                                                                <Search className="w-4 h-4" /> Strategic Insight
+                                                            </h4>
+                                                            <p className="text-zinc-800 dark:text-zinc-300 text-[15px] leading-relaxed">
+                                                                {parsed.insight}
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="grid md:grid-cols-2 gap-4">
+                                                        {parsed.action && (
+                                                            <div className="bg-gradient-to-br from-purple-50 to-fuchsia-50/50 dark:from-purple-950/30 dark:to-fuchsia-950/20 p-5 rounded-2xl border border-purple-100 dark:border-purple-900/30">
+                                                                <h4 className="flex items-center gap-2 text-xs font-extrabold text-purple-700 dark:text-purple-400 uppercase tracking-widest mb-3">
+                                                                    <CheckCircle2 className="w-4 h-4" /> Recommended Action
+                                                                </h4>
+                                                                <p className="text-zinc-800 dark:text-zinc-300 text-[15px] leading-relaxed">
+                                                                    {parsed.action}
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                        {parsed.impact && (
+                                                            <div className="bg-gradient-to-br from-emerald-50 to-teal-50/50 dark:from-emerald-950/30 dark:to-teal-950/20 p-5 rounded-2xl border border-emerald-100 dark:border-emerald-900/30">
+                                                                <h4 className="flex items-center gap-2 text-xs font-extrabold text-emerald-700 dark:text-emerald-400 uppercase tracking-widest mb-3">
+                                                                    <div className="w-4 h-4 rounded-full bg-emerald-700 dark:bg-emerald-400 text-white dark:text-emerald-950 flex items-center justify-center text-[10px] font-bold">!</div> Expected Impact
+                                                                </h4>
+                                                                <p className="text-zinc-800 dark:text-zinc-300 text-[15px] leading-relaxed">
+                                                                    {parsed.impact}
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-zinc-50 dark:bg-zinc-900/50 p-5 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+                                                    <p className="text-zinc-700 dark:text-zinc-300 text-[15px] leading-relaxed whitespace-pre-line">
+                                                        {task.description}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Footer Info */}
+                                        <div className="flex items-center gap-4 pt-4 border-t border-zinc-100 dark:border-zinc-800/50">
+                                            <div className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900 px-3 py-1.5 rounded-lg border border-zinc-100 dark:border-zinc-800">
+                                                <Clock className="w-3.5 h-3.5" />
+                                                Created {format(new Date(task.created_at), 'MMM d, yyyy')}
+                                            </div>
                                             {task.assignee_email && (
-                                                <span className="flex items-center gap-1 text-purple-500 bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-full">
-                                                    <Mail className="w-3 h-3" />
-                                                    {task.assignee_email}
-                                                </span>
-                                            )}
-                                            {task.source_url && (
-                                                <a
-                                                    href={task.source_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-1 text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full hover:underline"
-                                                    onClick={(e) => e.stopPropagation()}
-                                                >
-                                                    <Globe className="w-3 h-3" />
-                                                    {new URL(task.source_url).hostname}
-                                                </a>
+                                                <div className="flex items-center gap-2 text-xs font-medium text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/20 px-3 py-1.5 rounded-lg border border-purple-100 dark:border-purple-900/30">
+                                                    <Mail className="w-3.5 h-3.5" />
+                                                    Assigned to {task.assignee_email}
+                                                </div>
                                             )}
                                         </div>
                                     </div>
-
-                                    {/* Actions */}
-                                    <div className="flex items-center gap-2">
-                                        {task.status !== 'done' && (
-                                            <button
-                                                onClick={() => handleAssignEmail(task.id)}
-                                                className="p-2 text-zinc-400 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
-                                                title="Assign to Email"
-                                            >
-                                                <UserPlus className="w-5 h-5" />
-                                            </button>
-                                        )}
-
-                                        <select
-                                            value={task.status}
-                                            onChange={(e) => updateStatus(task.id, e.target.value)}
-                                            className="bg-transparent text-sm font-medium text-zinc-500 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 focus:border-zinc-400 outline-none"
-                                        >
-                                            <option value="todo">To Do</option>
-                                            <option value="in_progress">In Progress</option>
-                                            <option value="done">Done</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        ))}
+                                </motion.div>
+                            );
+                        })}
                     </AnimatePresence>
                 )}
             </div>

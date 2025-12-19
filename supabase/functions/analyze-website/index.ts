@@ -7,7 +7,7 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
     let brand_id_scope: string | null = null;
@@ -18,8 +18,8 @@ serve(async (req) => {
         else console.warn("[Edge] NO AUTH HEADER RECEIVED");
 
         const supabase = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+            (Deno as any).env.get('SUPABASE_URL') ?? '',
+            (Deno as any).env.get('SUPABASE_ANON_KEY') ?? '',
             {
                 auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
                 global: { headers: { Authorization: authHeader ?? '' } }
@@ -71,7 +71,7 @@ serve(async (req) => {
         // 1. Crawl Strategy: Jina AI (Primary) -> Cheerio (Fallback)
         console.log(`Crawling ${website_url}...`);
         let scrapedData = { markdown: "", title: "" };
-        const JINA_KEY = Deno.env.get('JINA_API_KEY');
+        const JINA_KEY = (Deno as any).env.get('JINA_API_KEY');
 
         try {
             // Priority 1: Jina AI (Advanced Config)
@@ -112,7 +112,7 @@ serve(async (req) => {
                 $('script, style, nav, footer, iframe, svg').remove();
 
                 scrapedData.title = $('title').text().trim() || "Website Analysis";
-                const h1 = $('h1').map((_, el) => $(el).text().trim()).get().join('; ');
+                const h1 = $('h1').map((_: any, el: any) => $(el).text().trim()).get().join('; ');
                 const body = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 8000);
 
                 // Convert to pseudo-markdown for the AI
@@ -124,7 +124,7 @@ serve(async (req) => {
         }
 
         // 2. Analyze with Gemini (Advanced Growth Engineering Prompt)
-        const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+        const GEMINI_API_KEY = (Deno as any).env.get('GEMINI_API_KEY');
         const prompt = `
         You are a World-Class Growth Engineer and Chief Marketing Officer (CMO).
         Perform a comprehensive, deep-dive audit of the following website content (provided as Markdown).
@@ -219,7 +219,7 @@ serve(async (req) => {
                     embedding: embeddings[i],
                     source_type: 'website_crawl',
                     metadata: { url: website_url, title: scrapedData.title }
-                })).filter((_, i) => embeddings[i]); // Ensure embedding exists
+                })).filter((_: any, i: number) => embeddings[i]); // Ensure embedding exists
 
                 if (memories.length > 0) {
                     await supabase.from('memories').insert(memories);
@@ -239,7 +239,7 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Analysis Failed:", error);
 
         // --- CREDIT REFUND LOGIC ---

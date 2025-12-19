@@ -63,7 +63,15 @@ export function BrandSettingsEditor({ brandId, onSaveSuccess }: { brandId?: stri
     const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
     const supabase = createClient();
-    const { register, handleSubmit, reset, setValue, watch } = useForm<any>();
+    const { register, handleSubmit, reset, setValue, watch } = useForm<any>({
+        defaultValues: {
+            audience_pain_points: "",
+            key_adjectives: "",
+            brand_values: "",
+            forbidden_words: "",
+            competitors: ""
+        }
+    });
 
     const industry = watch('industry');
     const primaryGoal = watch('primary_goal');
@@ -146,7 +154,7 @@ export function BrandSettingsEditor({ brandId, onSaveSuccess }: { brandId?: stri
 
                 audience_persona: {
                     demographics: formData.audience_demographics,
-                    pain_points: formData.audience_pain_points.split(',').map((s: string) => s.trim()).filter(Boolean)
+                    pain_points: (formData.audience_pain_points || "").split(',').map((s: string) => s.trim()).filter(Boolean)
                 },
                 primary_goal: formData.primary_goal,
 
@@ -154,8 +162,8 @@ export function BrandSettingsEditor({ brandId, onSaveSuccess }: { brandId?: stri
                 tone_voice: formData.tone_voice,
                 emoji_usage: formData.emoji_usage,
                 language: formData.language,
-                key_adjectives: formData.key_adjectives.split(',').map((s: string) => s.trim()).filter(Boolean),
-                brand_values: formData.brand_values.split(',').map((s: string) => s.trim()).filter(Boolean),
+                key_adjectives: (formData.key_adjectives || "").split(',').map((s: string) => s.trim()).filter(Boolean),
+                brand_values: (formData.brand_values || "").split(',').map((s: string) => s.trim()).filter(Boolean),
 
                 social_handles: {
                     instagram: formData.instagram,
@@ -171,8 +179,8 @@ export function BrandSettingsEditor({ brandId, onSaveSuccess }: { brandId?: stri
                     facebook: { page_access_token: formData.fb_token }
                 },
 
-                forbidden_words: formData.forbidden_words.split(',').map((s: string) => s.trim()).filter(Boolean),
-                competitors: formData.competitors.split(',').map((s: string) => ({ name: s.trim() })).filter(Boolean),
+                forbidden_words: (formData.forbidden_words || "").split(',').map((s: string) => s.trim()).filter(Boolean),
+                competitors: (formData.competitors || "").split(',').map((s: string) => ({ name: s.trim() })).filter(Boolean),
 
                 brand_color: formData.brand_color
             };

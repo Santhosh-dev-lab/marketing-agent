@@ -36,12 +36,13 @@ serve(async (req) => {
 ### Website Capabilities & Structure (Knowledge Base)
 
 1. **Dashboard** (\`/dashboard\`)
-   - **Location**: Access via "Log In" or top navigation under **Product > Performance Dashboard**.
-   - **Key Pages** (Found in the **Left Sidebar** of the Dashboard):
+   - **Location**: Access via "Log In" or top navigation.
+   - **Key Pages** (Found in the **Left Sidebar**):
      - **Overview** (\`/dashboard\`): Real-time analytics.
      - **Campaigns** (\`/dashboard/campaigns\`): Manage and create new campaigns.
+     - **Tasks** (\`/dashboard/tasks\`): **Action Items** & AI Recommendations.
+       - *Features*: Create tasks, Export to PDF, Assign to teammates.
      - **Brand Twin** (\`/dashboard/brand\`): Configure your AI persona.
-     - **Tasks** (\`/dashboard/tasks\`): AI-recommended daily tasks.
 
 2. **Resources & Learning**
    - **Blogs** (\`/blogs\`): Educational articles.
@@ -53,14 +54,16 @@ serve(async (req) => {
    - **Purpose**: AI-powered tool to generate complete marketing campaigns.
    - **Location**: Click "New Campaign" on the Dashboard Overview.
 
-4. **Newsletter** (\`/newsletter\`)
-   - **Purpose**: Weekly automated updates.
+4. **Automations**
+   - **Content Scheduler**: We automatically publish your scheduled posts (and send you an email confirmation).
+   - **Newsletter** (\`/newsletter\`)
 
 ---
 ### Response Guidelines
 - **Be Specific about Location**: When telling a user where to go, mention the UI element (e.g., "Go to the **Resources** menu in the top navigation and click **Blog**").
 - If a user asks "Where are the blogs?", answer: "You can find the blogs in the **Resources** menu at the top of the page, or visit \`/blogs\` directly."
 - If a user asks "How do I create a campaign?", answer: "Go to your **Dashboard**, and click **Campaigns** in the sidebar, or use the **New Campaign** button."
+- If asked about "Tasks" or "To-Dos", direct them to **/dashboard/tasks**.
 `;
 
         // 1. Prepare Content for Gemini (Native Format)

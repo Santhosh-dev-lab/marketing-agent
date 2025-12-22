@@ -13,7 +13,7 @@ interface Message {
 export function ChatWidget() {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>([
-        { role: "assistant", content: "Hello! I'm your Marketing Assistant. How can I help you today?" }
+        { role: "assistant", content: "Hey there, I am Mark. How can I help you today?" }
     ]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -158,7 +158,7 @@ export function ChatWidget() {
                                     <Bot className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-sm">Marketing Assistant</h3>
+                                    <h3 className="font-bold text-sm">Mark (AI Assistant)</h3>
                                     <span className="flex items-center gap-1 text-xs text-green-500">
                                         <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                                         Online
@@ -198,9 +198,30 @@ export function ChatWidget() {
                                 </div>
                             ))}
                             {isLoading && (
-                                <div className="flex items-center gap-2 text-zinc-400 text-xs ml-12">
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                    AI is typing...
+                                <div className="flex items-start gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-white/10 text-zinc-600 dark:text-zinc-400 flex items-center justify-center flex-shrink-0">
+                                        <Bot className="w-4 h-4" />
+                                    </div>
+                                    <div className="bg-zinc-100 dark:bg-white/10 p-3 rounded-2xl rounded-tl-sm text-zinc-900 dark:text-zinc-100 flex items-center gap-1">
+                                        <motion.div
+                                            initial={{ opacity: 0.3 }}
+                                            animate={{ opacity: 1 }}
+                                            transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse", delay: 0 }}
+                                            className="w-1.5 h-1.5 rounded-full bg-zinc-400"
+                                        />
+                                        <motion.div
+                                            initial={{ opacity: 0.3 }}
+                                            animate={{ opacity: 1 }}
+                                            transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse", delay: 0.2 }}
+                                            className="w-1.5 h-1.5 rounded-full bg-zinc-400"
+                                        />
+                                        <motion.div
+                                            initial={{ opacity: 0.3 }}
+                                            animate={{ opacity: 1 }}
+                                            transition={{ duration: 0.5, repeat: Infinity, repeatType: "reverse", delay: 0.4 }}
+                                            className="w-1.5 h-1.5 rounded-full bg-zinc-400"
+                                        />
+                                    </div>
                                 </div>
                             )}
                         </div>
